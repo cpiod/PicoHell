@@ -46,8 +46,8 @@ function _draw()
  if(state==100) _draw_title()
 end
 
-pentacle={{"c",0,0,47},
-{"c",0,0,39},
+pentacle={{"o",0,0,47},
+{"o",0,0,39},
 {"l",38,-8,-24,31},
 {"l",-24,31,3,-39},
 {"l",3,-39,20,32},
@@ -95,7 +95,7 @@ pentacle={{"c",0,0,47},
 }
 
 function rotate(x,y)
- return x*cosa-y*sina+64,x*sina+y*cosa+64
+ return mul*(x*cosa-y*sina)+64,mul*(x*sina+y*cosa)+64
 end
 
 function _draw_title()
@@ -104,23 +104,20 @@ local a=t()/300
 --local a=0
 cosa=cos(a)
 sina=sin(a)
+mul=min(t()/50+0.8,1.5)
 printh("a")
 --camera(-64,-64)
 for v in all(pentacle) do
  local c=9
- if v[1]=="c" then
-	 x,y=rotate(v[2],v[3])
-	 if(v[5]!=nil) c=v[5]
-  circ(x,y,v[4],c)
- elseif v[1]=="l" then
+ if v[1]=="l" then
   x,y=rotate(v[2],v[3])
   x2,y2=rotate(v[4],v[5])
   if(v[6]!=nil) c=v[6]
   line(x,y,x2,y2,c)
  elseif v[1]=="o" then
   x,y=rotate(v[2],v[3])
-  circfill(x,y,v[4],0)
-  circ(x,y,v[4],c)
+  circfill(x,y,v[4]*mul,0)
+  circ(x,y,v[4]*mul,c)
  elseif v[1]=="p" then
   x,y=rotate(v[2],v[3])
   pset(x,y)
@@ -132,8 +129,8 @@ spr(96,8+7*8,55,7,2)
 print_center("a jupiter hell demake by cpiod",15*8+1,6)
 
 print_center("press ❎ to start",80,7)
-print((stat(32)-64).." "..(stat(33)-64),0,0,11)
-pset(stat(32),stat(33),11)
+--print((stat(32)-64).." "..(stat(33)-64),0,0,11)
+--pset(stat(32),stat(33),11)
 end
 
 function print_center(s,y,c)
