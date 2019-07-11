@@ -16,13 +16,13 @@ __lua__
 
 function _init()
  poke(0x5f2d, 1)
- 
 	x=8
 	y=8
 	facing=1
 	cam_x=0
 	cam_y=0
 	state=100
+	music(0)
  bullet_anim=false
  bullets={}
  entities={}
@@ -31,19 +31,27 @@ function _init()
  p_currentw=1
 end
 
---function reset()
--- reload()
--- _init()
---end
-
-
+function show_ctrl()
+ old_state=state
+ state=102
+end
 
 -->8
 -- draw
 
+title_cam_y=0
+
 function _draw()
  if(state<100) _draw_game()
- if(state==100) _draw_title()
+ if(state==100 or state==102) _draw_title()
+ if state==101 then
+  title_cam_y+=1
+  _draw_title()
+  if title_cam_y==128 then
+   state=1
+   show_ctrl()
+  end
+ end
 end
 
 pentacle={{"o",0,0,47},
@@ -94,53 +102,69 @@ pentacle={{"o",0,0,47},
 {"l",11,-37,8,-17}
 }
 
+function draw_pentacle()
+ for v in all(pentacle) do
+  local c=9
+  if v[1]=="l" then
+   local x,y=rotate(v[2],v[3])
+   local x2,y2=rotate(v[4],v[5])
+   if(v[6]!=nil) c=v[6]
+   line(x,y,x2,y2,c)
+  elseif v[1]=="o" then
+   local x,y=rotate(v[2],v[3])
+   circfill(x,y,v[4]*mul,0)
+   circ(x,y,v[4]*mul,c)
+  elseif v[1]=="p" then
+   local x,y=rotate(v[2],v[3])
+   pset(x,y)
+  end
+ end
+end
+
 function rotate(x,y)
  return mul*(x*cosa-y*sina)+64,mul*(x*sina+y*cosa)+64
 end
 
 function _draw_title()
 cls()
+camera()
 local a=t()/300
 --local a=0
-cosa=cos(a)
-sina=sin(a)
+cosa,sina=cos(a),sin(a)
 mul=min(t()/50+0.8,1.5)
-printh("a")
---camera(-64,-64)
-for v in all(pentacle) do
- local c=9
- if v[1]=="l" then
-  x,y=rotate(v[2],v[3])
-  x2,y2=rotate(v[4],v[5])
-  if(v[6]!=nil) c=v[6]
-  line(x,y,x2,y2,c)
- elseif v[1]=="o" then
-  x,y=rotate(v[2],v[3])
-  circfill(x,y,v[4]*mul,0)
-  circ(x,y,v[4]*mul,c)
- elseif v[1]=="p" then
-  x,y=rotate(v[2],v[3])
-  pset(x,y)
- end
-end
+draw_pentacle()
+camera(0, title_cam_y)
 --spr(64,40,45,7,4)
 spr(64,13,55,7,2)
 spr(96,8+7*8,55,7,2)
 print_center("a jupiter hell demake by cpiod",15*8+1,6)
-
-print_center("press ❎ to start",80,7)
+local y,d=168,7
+print_center("press 🅾️ to start ",80,7)
+print_center("controls",y-2*d,7)
+print_center("press ⬅️⬆️⬇️➡️ to move    ",y,6)
+print_center("press 🅾️ to shoot ",y+2*d,6)
+print_center("hold 🅾️ to aim ",y+3*d,6)
+print_center("press ❎ to reload ",y+5*d,6)
+print_center("hold ❎ to switch weapon ",y+6*d,6)
+print_center("hold ⬇️ to grab ",y+7*d,6)
+print_center("kill all the demons!",y+9*d,8)
 --print((stat(32)-64).." "..(stat(33)-64),0,0,11)
 --pset(stat(32),stat(33),11)
 end
 
 function print_center(s,y,c)
-x=64-#s*2
+local x=64-#s*2
 rectfill(x-1,y-1,x+#s*4+3,y+5,0)
 print(s,x,y,c)
 end
 
 function _draw_game()
  cls()
+ camera()
+ local a=t()/300
+ cosa,sina=cos(a),sin(a)
+ mul=1.5
+-- draw_pentacle()
  clip(0,8,128,112)
  camera(cam_x+8*x-64,cam_y+8*y-64)
  -- todo: background art?
@@ -227,9 +251,17 @@ nil,nil,nil,{0,1}}
 function _update()
  printh(stat(0).."kb "..stat(1).."%")
  if state==100 then
-  if(btn()!=0) state=0
+  if(btnp()!=0) state=101
+ elseif state==101 then
+  return
+ elseif state==102 then
+  if btnp()!=0 then
+   menuitem(2,"show controls",show_ctrl)
+   state=0
+   music(-1)
+  end
  end
-
+ 
  if(bullet_anim) return
 
  -- player turn
@@ -457,3 +489,17 @@ __map__
 __sfx__
 000100000f05016050190501e0502305027050290502a0502a0502705026050210500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000200000205003050030500c0500c0500b0500a0500a050070500305002050010500005000050050000400003000020000200000000000000000000000000000000000000000000000000000000000000000000
+001900000e0500e0500e0500e0500c0500c0500e05010050010000200002000010000000000000000000100001000010000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+001a00000005000050000500505000050000500005000050000500005000050000500005000050060500005006050000500005000050000500005000050000500305000050000500005000050000500005000050
+001a00000061000610006100061000610006100061000610006100161001610016100161001610006100061000610006100061000610006100061001610006100061000610006100061000610006100161000610
+__music__
+03 0a0b4344
+00 4a424344
+
