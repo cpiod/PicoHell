@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 18
 __lua__
 -- pico hell
--- by cpiod
+-- by cpio
 
 -- state:
 -- 0: player turn
@@ -26,12 +26,17 @@ function _init()
 	light_x=1
 	light_y=1
 	facing=1
+	maxhp=150
+	hp=maxhp
 	cam_x=0
 	cam_y=0
 	state=100
 	--music(0)
  bullet_anim=false
  bullets={}
+ floor_weapons={}
+ decor={}
+ add_blood(5,8)
  entities={make_enemy(0,3,8)}
  barrels={make_barrel(2,10)}
  ammo={12,0,0}
@@ -229,7 +234,10 @@ function _draw_game()
  
    if is_visible(x2,y2,false) then
     map(x2,y2,8*x2,8*y2,1,1)
-    -- color entities sprites
+    -- color sprites
+    for d in all(decor) do
+     if(d.x==x2 and d.y==y2) spr(d.sprnb,8*d.x,8*d.y-2)
+    end
     for e in all(entities) do
      if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
     end
@@ -263,7 +271,7 @@ function _draw_game()
  camera()
  -- health bar
  color(3)
- print("♥========",16,1)
+ print("♥========"..hp.."/"..maxhp,16,1)
  
  print(p_currentw.." "
  ..weapon_name[p_currentw].." "
@@ -294,6 +302,12 @@ end
 -->8
 -- entity
 
+-- entity type:
+-- 0: weapon
+-- 1: enemy
+-- 2: barrel
+-- 3: decoration
+
 -- weapons type:
 -- 0: pistol
 -- 1: shotgun
@@ -310,7 +324,7 @@ weapon_name={"pistol","shotgun","rifle"}
 -- dmg: dmmage
 -- disp: dispersion
 function make_weapon(typ)
-	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1}
+	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0}
 	return nil
 end
 
@@ -320,14 +334,21 @@ end
 -- hp: health point
 -- wpn: weapon struct
 function make_enemy(typ,x,y)
- if(typ==0) return {sprnb=48,x=x,y=y,hp=10,wpn=make_weapon(0)}
+ if(typ==0) return {sprnb=48,x=x,y=y,hp=10,wpn=make_weapon(0),ent=1}
  return nil
 end
 
 -- barrel struct:
 -- x,y: pos
 function make_barrel(x,y)
-	return {x=x,y=y}
+	return {x=x,y=y,ent=2}
+end
+
+-- decorative struct:
+-- x,y: pos
+-- sprnb: sprite number
+function add_blood(x,y)
+ return add(decor,{x=x,y=y,sprnb=5,ent=3})
 end
 -->8
 -- gameloop
@@ -360,7 +381,8 @@ function _update()
    light_y=d[2]
    if(d[1]!=0) facing=d[1]
    --check collision
-   if fget(mget(next_x,next_y))%2==0 then
+   if fget(mget(next_x,next_y))%2==0
+      and not chk_ent(next_x,next_y) then
     x=next_x
     y=next_y
     state=2 --end of turn
@@ -415,10 +437,12 @@ function _update()
     state=0
    else
     --succesful shot
-    p_weapons[p_currentw].amm-=1
+    local w=p_weapons[p_currentw]
+    w.amm-=1
 --	   bullet_anim=true
 	   local vx=(a_x-x)
 	   local vy=(a_y-y)
+	   shoot(x,y,a_x,a_y,w)
 	   add(bullets,{x0=8*x+4,y0=8*y+4,vx=vx,vy=vy,dur=10})
 	   state=2 --end of turn
 	   sfx(0)
@@ -434,6 +458,36 @@ function _update()
   state=0
  end
 end
+
+-- shoot from x1,y1 to x2,y2
+function shoot(x1,y1,x2,y2,w)
+ e=los_line(x1,y1,x2,y2,nil_fun,chk_ent,false)
+ if e then
+  -- enemy
+  if e.ent==1 then
+   damage(e,w.dmg)
+  -- barrel
+  elseif e.ent==2 then
+   local dmg=15
+   del(barrels,e)
+   for i=-2,2 do
+    for j=-2,2 do
+     e2=chk_ent(e.x+i,e.y+j)
+     if(e2) damage(e2,dmg)
+     if(x==e.x+i and y==e.y+j) hp-=dmg
+    end
+   end
+  end
+ end
+end
+
+function damage(e,dmg)
+ e.hp-=dmg
+ if e.hp<0 then
+  del(entities,e)
+  add_blood(e.x,e.y)
+ end
+end
 -->8
 -- los
 
@@ -441,6 +495,16 @@ function nil_fun(x,y)
  --spr(48,8*x,8*y)
 end
 
+-- check collision with entities
+function chk_ent(x,y)
+ for e in all(entities) do
+  if(e.x==x and e.y==y) return e
+ end
+ for e in all(barrels) do
+  if(e.x==x and e.y==y) return e
+ end
+ return nil
+end
 
 function chk_wall(x,y)
  return band(fget(mget(x,y)),1)!=0
@@ -463,7 +527,8 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
   iy = delta_y > 0 and 1 or -1
   delta_y = 2 * abs(delta_y)
  
-  if(chk_first and chk(x1,y1)) return true
+  local b=chk(x1,y1)
+  if(chk_first and b) return b
   fun(x1, y1)
  
   if delta_x >= delta_y then
@@ -478,7 +543,8 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
       error = error + delta_y
       x1 = x1 + ix
  
-						if(chk(x1,y1)) return true
+      local b=chk(x1,y1)
+       if(b) return b
       fun(x1, y1)
     end
   else
@@ -492,11 +558,12 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
  
       error = error + delta_x
       y1 = y1 + iy
-      if(chk(x1,y1)) return true
+      local b=chk(x1,y1)
+      if(b) return b
       fun(x1, y1)
     end
   end
-  return false
+  return nil
 end
 
 
