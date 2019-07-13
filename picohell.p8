@@ -21,24 +21,26 @@ function _init()
  poke(0x5f2d, 1)
  palt(0, false)
  palt(14, true)
- x=5
-	y=8
-	light_x=1
-	light_y=1
+ -- light direction
+	light_x,light_y=1,1
+	-- player sprite direction
 	facing=1
 	maxhp=150
-	hp=maxhp
+--	hp=maxhp
 	cam_x=0
 	cam_y=0
 	state=100
 	--music(0)
  bullet_anim=false
+ player={x=5,y=8,hp=maxhp,ent=9}
  bullets={}
  floor_weapons={}
  decor={}
  soot={}
  add_blood(5,8)
  entities={make_enemy(0,3,8)}
+ add(entities,make_enemy(0,2,8))
+ add(entities,make_enemy(0,2,9))
  barrels={make_barrel(2,10)}
  ammo={12,0,0}
  p_weapons={make_weapon(0)}
@@ -191,7 +193,7 @@ function _draw_game()
   y0=p[2]
 	 draw_pentacle(2)
 	end
- camera(cam_x+8*x-64,cam_y+8*y-64)
+ camera(cam_x+8*player.x-64,cam_y+8*player.y-64)
  
  -- unseen map and entities
  for i=0,7 do
@@ -228,9 +230,9 @@ function _draw_game()
   for j=-l,l do
    local x2,y2
    if light_y!=0 then
-    x2,y2=x+j,y+i
+    x2,y2=player.x+j,player.y+i
    else
-    x2,y2=x+i,y+j
+    x2,y2=player.x+i,player.y+j
    end
  
    if is_visible(x2,y2,false) then
@@ -255,13 +257,13 @@ function _draw_game()
  -- player
  local s=32
  if(t()%1>0.5) s=33
- spr(s,x*8,y*8-2,1,1,facing>0)
+ spr(s,player.x*8,player.y*8-2,1,1,facing>0)
  
  -- aim
  if state==1 then
   local s=17
   -- aim on player
-  if(a_x==x and a_y==y) s=19
+  if(a_x==player.x and a_y==player.y) s=19
   -- no los
   if(not is_visible(a_x,a_y,true)) s=19
 --  if(los_line(a_x,a_y,x,y,nil_fun,chk_opaque,true)) s=19
@@ -275,7 +277,7 @@ function _draw_game()
  camera()
  -- health bar
  color(3)
- print("♥========"..hp.."/"..maxhp,16,1)
+ print("♥========"..player.hp.."/"..maxhp,16,1)
  
  print(p_currentw.." "
  ..weapon_name[p_currentw].." "
@@ -299,7 +301,7 @@ end
 
 function los_test(x,y)
 -- if fget(mget(x,y))%2==1 then
-  spr(2,x*8,y*8)
+  spr(2,player.x*8,player.y*8)
 -- end
 end
 
@@ -311,6 +313,7 @@ end
 -- 1: enemy
 -- 2: barrel
 -- 3: decoration
+-- 9: player
 
 -- weapons type:
 -- 0: pistol
@@ -337,8 +340,10 @@ end
 -- x,y: pos
 -- hp: health point
 -- wpn: weapon struct
+-- rng: preferred range
+
 function make_enemy(typ,x,y)
- if(typ==0) return {sprnb=48,x=x,y=y,hp=10,wpn=make_weapon(0),ent=1}
+ if(typ==0) return {sprnb=48,x=x,y=y,hp=10,wpn=make_weapon(0),ent=1,rng=4}
  return nil
 end
 
@@ -378,23 +383,22 @@ function _update()
  
  if(bullet_anim) return
 
- --player turn
+ -- player turn
  if state==0 then
   local d=dep[btnp()]
-  --move
+  -- move
   if d!=nil then
-   local next_x=x+d[1]
-   local next_y=y+d[2]
+   local next_x=player.x+d[1]
+   local next_y=player.y+d[2]
    light_x=d[1]
    light_y=d[2]
    if(d[1]!=0) facing=d[1]
-   --check collision
-   if fget(mget(next_x,next_y))%2==0
-      and not chk_ent(next_x,next_y) then
-    x=next_x
-    y=next_y
-    state=2 --end of turn
-    --update camera
+   -- check collision
+   if can_go(next_x,next_y) then
+    player.x=next_x
+    player.y=next_y
+    state=2 -- end of turn
+    -- update camera
     local cam_xc=d[1]*20
     local cam_yc=d[2]*20
     if(cam_x<cam_xc) cam_x+=4
@@ -402,16 +406,23 @@ function _update()
     if(cam_y<cam_yc) cam_y+=4
     if(cam_y>cam_yc) cam_y-=4
    end
-  --start aim
+  -- start aim
   elseif btn(5) then
    if p_weapons[p_currentw].amm == 0 then
-    --no ammo !
+    -- no ammo !
     sfx(1)
    else
     state=1
-    --todo: aim an enemy
-    a_x=x
-    a_y=y
+    local e=closest_enemy(player.x,player.y)
+    if e==nil then
+     a_x=player.x
+     a_y=player.y
+    else
+     a_x=e.x
+     a_y=e.y
+     local a=a_x-player.x
+     if(a!=0) facing=a
+    end
    end
   elseif btn(4) then
    printh(ammo)
@@ -422,36 +433,36 @@ function _update()
    state=2 --end of turn
   end
   
- --player aim
+ -- player aim
  elseif state==1 then
   local d=dep[band(btnp(),15)]
-  --aim
+  -- aim
   if d!=nil then
    a_x+=d[1]
    a_y+=d[2]
-   --orient lamp according to aim
-   local a=a_x-x
-   local b=a_y-y
-   if(a!=0) facing=a_x-x
+   -- orient lamp according to aim
+   local a=a_x-player.x
+   local b=a_y-player.y
+   if(a!=0) facing=a
    if(a>abs(b)) light_x,light_y=1,0
    if(b>abs(a)) light_x,light_y=0,1
    if(a<-abs(b)) light_x,light_y=-1,0
    if(b<-abs(a)) light_x,light_y=0,-1
   end
   if not btn(5) then
-   --no self-shot
-   if a_x==x and a_y==y then
+   -- no self-shot
+   if a_x==player.x and a_y==player.y then
     sfx(1)
     state=0
    else
-    --succesful shot
+    -- successful shot
     local w=p_weapons[p_currentw]
     w.amm-=1
---	   bullet_anim=true
-	   local vx=(a_x-x)
-	   local vy=(a_y-y)
-	   shoot(x,y,a_x,a_y,w)
-	   add(bullets,{x0=8*x+4,y0=8*y+4,vx=vx,vy=vy,dur=10})
+	   bullet_anim=true
+	   local vx=(a_x-player.x)
+	   local vy=(a_y-player.y)
+	   shoot(player.x,player.y,a_x,a_y,w)
+	   add(bullets,{x0=8*player.x+4,y0=8*player.y+4,vx=vx,vy=vy,dur=10})
 	   state=2 --end of turn
 	   sfx(0)
    end
@@ -461,6 +472,28 @@ function _update()
  elseif state==2 then
   printh("enemy turn")
   state=0
+  for e in all(entities) do
+   local d=dist(player.x,player.y,e.x,e.y)
+   printh(d.." "..abs(player.x-e.x).." "..abs(player.y-e.y))
+   if d>e.rng then
+    local dx,dy
+    if player.x>e.x then
+     dx=1
+    else
+     dx=-1
+    end
+    if player.y>e.y then
+     dy=1
+    else
+     dy=-1
+    end
+    if abs(player.x-e.x)>d/2 and can_go(e.x+dx,e.y) then
+     e.x+=dx
+    elseif abs(player.y-e.y)>d/2 and can_go(e.x,e.y+dy) then
+     e.y+=dy
+    end
+   end
+  end
  end
  printh(stat(0).."kb "..(stat(1)*100).."%")
 end
@@ -482,7 +515,7 @@ function shoot(x1,y1,x2,y2,w)
      if(not chk_wall(x3,y3) and rnd()>0.4) add_soot(x3,y3)
      e2=chk_ent(x3,y3)
      if(e2) damage(e2,dmg)
-     if(x==x3 and y==y3) hp-=dmg
+--     if(x==x3 and y==y3) hp-=dmg
     end
    end
   end
@@ -496,6 +529,30 @@ function damage(e,dmg)
   add_blood(e.x,e.y)
  end
 end
+
+function dist(x1,y1,x2,y2)
+ return abs(x1-x2)+abs(y1-y2)
+end
+
+function can_go(next_x,next_y)
+ return fget(mget(next_x,next_y))%2==0
+      and not chk_ent(next_x,next_y)
+end
+
+function closest_enemy(x,y)
+ local e2=nil
+ local m=0
+ for e in all(entities) do
+  if is_visible(e.x,e.y,true) then
+   local d=dist(player.x,player.y,e.x,e.y)
+   if e2==nil or d<m then
+    e2=e
+    m=d
+   end
+  end
+ end
+ return e2
+end
 -->8
 -- los
 
@@ -504,12 +561,13 @@ function nil_fun(x,y)
 end
 
 -- check collision with entities
-function chk_ent(x,y)
+function chk_ent(x1,y1)
+ if(x1==player.x and y1==player.y) return player
  for e in all(entities) do
-  if(e.x==x and e.y==y) return e
+  if(e.x==x1 and e.y==y1) return e
  end
  for e in all(barrels) do
-  if(e.x==x and e.y==y) return e
+  if(e.x==x1 and e.y==y1) return e
  end
  return nil
 end
@@ -523,7 +581,7 @@ function chk_opaque(x,y)
 end
 
 function is_visible(x2,y2,chk_last)
- return not los_line(x2,y2,x,y,nil_fun,chk_opaque,chk_last)
+ return not los_line(x2,y2,player.x,player.y,nil_fun,chk_opaque,chk_last)
 end
 
 function los_line(x1, y1, x2, y2, fun, chk, chk_first)
