@@ -9,7 +9,8 @@ __lua__
 -- 1: player aim
 -- 2: enemy turn
 -- 100: title screen
--- 101: game over screen
+-- 101: controls
+-- 102: game over screen
 
 -- flag: 0:non-walkable
 -- 1:bullet-opaque
@@ -25,8 +26,7 @@ function _init()
 	light_x,light_y=1,1
 	-- player sprite direction
 	facing=1
-	maxhp=150
---	hp=maxhp
+	maxhp=100
 	cam_x=0
 	cam_y=0
 	state=100
@@ -244,6 +244,9 @@ function _draw_game()
     for d in all(decor) do
      if(d.x==x2 and d.y==y2) spr(d.sprnb,8*d.x,8*d.y-2)
     end
+    for e in all(floor_weapons) do
+     if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
+    end
     for e in all(entities) do
      if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
     end
@@ -330,8 +333,9 @@ weapon_name={"pistol","shotgun","rifle"}
 -- rng: max range
 -- dmg: dmmage
 -- disp: dispersion
+-- sprnb: sprite number
 function make_weapon(typ)
-	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0}
+	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=49}
 	return nil
 end
 
@@ -390,9 +394,7 @@ function _update()
   if d!=nil then
    local next_x=player.x+d[1]
    local next_y=player.y+d[2]
-   light_x=d[1]
-   light_y=d[2]
-   if(d[1]!=0) facing=d[1]
+   update_facing(d[1],d[2])
    -- check collision
    if can_go(next_x,next_y) then
     player.x=next_x
@@ -420,8 +422,7 @@ function _update()
     else
      a_x=e.x
      a_y=e.y
-     local a=a_x-player.x
-     if(a!=0) facing=a
+     update_facing(a_x-player.x,a_y-player.y)
     end
    end
   elseif btn(4) then
@@ -443,16 +444,12 @@ function _update()
    -- orient lamp according to aim
    local a=a_x-player.x
    local b=a_y-player.y
-   if(a!=0) facing=a
-   if(a>abs(b)) light_x,light_y=1,0
-   if(b>abs(a)) light_x,light_y=0,1
-   if(a<-abs(b)) light_x,light_y=-1,0
-   if(b<-abs(a)) light_x,light_y=0,-1
+   update_facing(a,b)
   end
   if not btn(5) then
    -- no self-shot
    if a_x==player.x and a_y==player.y then
-    sfx(1)
+    --sfx(1)
     state=0
    else
     -- successful shot
@@ -475,7 +472,9 @@ function _update()
   for e in all(entities) do
    local d=dist(player.x,player.y,e.x,e.y)
    printh(d.." "..abs(player.x-e.x).." "..abs(player.y-e.y))
-   if d>e.rng then
+   if not is_visible(e.x,e.y,true) then
+    -- do nothing if player not seen
+   elseif d>e.rng then
     local dx,dy
     if player.x>e.x then
      dx=1
@@ -492,6 +491,9 @@ function _update()
     elseif abs(player.y-e.y)>d/2 and can_go(e.x,e.y+dy) then
      e.y+=dy
     end
+   else
+    printh("enemy attacks")
+   	shoot(e.x,e.y,player.x,player.y,e.wpn)
    end
   end
  end
@@ -502,15 +504,20 @@ end
 function shoot(x1,y1,x2,y2,w)
  e=los_line(x1,y1,x2,y2,nil_fun,chk_ent,false)
  if e then
+  -- player
+  if e.ent==9 then
+   damage(e,w.dmg)
+   if(player.hp<=0) state=102
   -- enemy
-  if e.ent==1 then
+  elseif e.ent==1 then
    damage(e,w.dmg)
   -- barrel
   elseif e.ent==2 then
-   local dmg=15
    del(barrels,e)
    for i=-2,2 do
     for j=-2,2 do
+     local dmg=flr(50/(abs(i)+abs(j)+1))
+     printh(i.." "..j.." "..dmg)
      local x3,y3=e.x+i,e.y+j
      if(not chk_wall(x3,y3) and rnd()>0.4) add_soot(x3,y3)
      e2=chk_ent(x3,y3)
@@ -525,8 +532,13 @@ end
 function damage(e,dmg)
  e.hp-=dmg
  if e.hp<0 then
-  del(entities,e)
-  add_blood(e.x,e.y)
+  if(e.ent==1) then
+   del(entities,e)
+   add_blood(e.x,e.y)
+   e.wpn.x=e.x
+   e.wpn.y=e.y
+   add(floor_weapons,e.wpn)
+  end
  end
 end
 
@@ -552,6 +564,14 @@ function closest_enemy(x,y)
   end
  end
  return e2
+end
+
+function update_facing(a,b)
+ if(a!=0) facing=a
+ if(a>abs(b)) light_x,light_y=1,0
+ if(b>abs(a)) light_x,light_y=0,1
+ if(a<-abs(b)) light_x,light_y=-1,0
+ if(b<-abs(a)) light_x,light_y=0,-1
 end
 -->8
 -- los
@@ -658,14 +678,14 @@ e49449ff666666ffe49449ffe49449ffe511115e0000000010000000000000101000000000000000
 eee555eee49449ffeee555eeeee555eeee5155ee0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee5e5eeeee555eeeee5e5eeee5ee5eeeee5eeee0000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
 eee5e5eeeee5e5eeeee5ee5eee5ee5eeeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
-eee555ee000000000000000000000000000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
-ee8585ee000000000000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
-ee55522e000000000000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
-6666669e000000000000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
-e494499e000000000000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
-eee555ee000000000000000000000000000000000000000010000011100000101000001110000000000000111000001000000000000000000000000000000000
-eee5e5ee000000000000000000000000000000000000000011111110111111101111111011111111111111101111111000000000000000000000000000000000
-eee5e5ee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+eee555eeeeeeeeee0000000000000000000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
+ee8585eeeeeeeeee0000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
+ee55522eeeeeeeeee000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
+6666669e6666644ee000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
+e494499ee4444e54e000000000000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
+eee555eeeeeeeee4e000000000000000000000000000000010000011100000101000001110000000000000111000001000000000000000000000000000000000
+eee5e5eeeeeeeeee0000000000000000000000000000000011111110111111101111111011111111111111101111111000000000000000000000000000000000
+eee5e5eeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000
 eee888888888eeee888eee8888888888eeeee88888888eeeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000
 eee8888888888eee8882ee88888888822eee8888888882eeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000
