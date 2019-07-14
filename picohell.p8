@@ -19,9 +19,11 @@ __lua__
 -- 1: error
 
 function _init()
- poke(0x5f2d, 1)
+-- poke(0x5f2d, 1) -- mouse debug
  palt(0, false)
  palt(14, true)
+ btnstat=0
+ 
  -- light direction
 	light_x,light_y=1,1
 	-- player sprite direction
@@ -31,7 +33,7 @@ function _init()
 	cam_y=0
 	state=100
 	--music(0)
- bullet_anim=false
+ anim=false
  player={x=5,y=8,hp=maxhp,ent=9}
  bullets={}
  floor_weapons={}
@@ -157,23 +159,24 @@ camera(0, title_cam_y)
 --spr(64,40,45,7,4)
 spr(64,13,55,7,2)
 spr(96,8+7*8,55,7,2)
-print_center("a jupiter hell demake by cpiod",15*8+1,6)
+print_center("a jupiter hell demake by cpiod",15*8+1,6,1)
 local y,d=168,7
-print_center("press 🅾️ to start ",80,7)
-print_center("controls",y-2*d,7)
-print_center("press ⬅️⬆️⬇️➡️ to move    ",y,6)
-print_center("press 🅾️ to shoot ",y+2*d,6)
-print_center("hold 🅾️ to aim ",y+3*d,6)
-print_center("press ❎ to reload ",y+5*d,6)
-print_center("hold ❎ to switch weapon ",y+6*d,6)
-print_center("hold ⬇️ to grab ",y+7*d,6)
-print_center("kill all the demons!",y+9*d,8)
+print_center("press 🅾️ to start",80,7,1)
+print_center("controls",y-2*d,7,0)
+print_center("press ⬅️⬆️⬇️➡️ to move",y,6,4)
+print_center("press 🅾️ to shoot",y+2*d,6,1)
+print_center("hold 🅾️ to aim",y+3*d,6,1)
+print_center("press ❎ to reload",y+5*d,6,1)
+print_center("hold ❎ to switch weapon",y+6*d,6,1)
+print_center("hold ⬇️ to grab",y+7*d,6,1)
+print_center("kill all the demons!",y+9*d,8,0)
 --print((stat(32)-64).." "..(stat(33)-64),0,0,11)
 --pset(stat(32),stat(33),11)
 end
 
-function print_center(s,y,c)
-local x=64-#s*2
+function print_center(s,y,c,d)
+-- d because there are "double" symbols
+local x=64-(#s+d)*2
 rectfill(x-1,y-1,x+#s*4+3,y+5,0)
 print(s,x,y,c)
 end
@@ -278,7 +281,7 @@ function _draw_game()
  end
 -- los_line(x,y,1,1,los_test,chk_wall)
  
- if(bullet_anim) draw_bullets()
+ if(anim) animate()
  
  clip()
  camera()
@@ -295,6 +298,11 @@ function _draw_game()
  flip()
 end
 
+function animate()
+ local again=false
+ if(#bullets>0) draw_bullets() again=true
+end
+
 function draw_bullets()
  for b in all(bullets) do
   pset(b.x0,b.y0)
@@ -303,7 +311,6 @@ function draw_bullets()
   b.dur-=1
   if(b.dur==0) del(bullets,b)
  end
- if(#bullets==0) bullet_anim=false
 end
 
 function los_test(x,y)
@@ -335,12 +342,12 @@ weapon_name={"pistol","shotgun","rifle"}
 -- mag: magazine size
 -- bul: bullet per shot
 -- rng: max range
--- dmg: dmmage
+-- dmg: damage
 -- disp: dispersion
 -- sprnb: sprite number
 function make_weapon(typ)
 	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=49}
-	return nil
+	assert(false)
 end
 
 -- enemy struct:
@@ -352,7 +359,7 @@ end
 
 function make_enemy(typ,x,y)
  if(typ==0) return {sprnb=48,x=x,y=y,hp=10,wpn=make_weapon(0),ent=1,rng=4}
- return nil
+	assert(false)
 end
 
 -- barrel struct:
@@ -396,8 +403,10 @@ function _update()
   end
  end
  
- if(bullet_anim) return
-
+ if(bullet_anm) return
+ 
+ new_btnstat=btn()
+ printh(btnstat.." "..new_btnstat)
  -- player turn
  if state==0 then
   local d=dep[btnp()]
@@ -465,7 +474,7 @@ function _update()
    local b=a_y-player.y
    update_facing(a,b)
   end
-  if not btn(5) then
+  if not btn(❎) then
    -- no self-shot
    if a_x==player.x and a_y==player.y then
     --sfx(1)
@@ -473,13 +482,13 @@ function _update()
    else
     -- successful shot
     local w=p_weapons[p_currentw]
-    w.amm-=1
-	   bullet_anim=true
+    w.amm-=w.bul
+	   anim=true
 	   local vx=(a_x-player.x)
 	   local vy=(a_y-player.y)
 	   shoot(player.x,player.y,a_x,a_y,w)
 	   add(bullets,{x0=8*player.x+4,y0=8*player.y+4,vx=vx,vy=vy,dur=10})
-	   state=2 --end of turn
+	   state=2 -- end of turn
 	   sfx(0)
    end
   end
@@ -516,6 +525,7 @@ function _update()
    end
   end
  end
+ btnstat=new_btnstat
  printh(stat(0).."kb "..(stat(1)*100).."%")
 end
 
@@ -536,12 +546,10 @@ function shoot(x1,y1,x2,y2,w)
    for i=-2,2 do
     for j=-2,2 do
      local dmg=flr(e.dmg/(abs(i)+abs(j)+1))
-     printh(i.." "..j.." "..dmg)
      local x3,y3=e.x+i,e.y+j
      if(not chk_wall(x3,y3) and rnd()>0.4) add_soot(x3,y3)
      e2=chk_ent(x3,y3)
      if(e2) damage(e2,dmg)
---     if(x==x3 and y==y3) hp-=dmg
     end
    end
   end
@@ -592,11 +600,16 @@ function update_facing(a,b)
  if(a<-abs(b)) light_x,light_y=-1,0
  if(b<-abs(a)) light_x,light_y=0,-1
 end
+
+function get_floor_weapon()
+ for e in all(floor_weapons) do
+  if(e.x==player.x and e.y==player.y) return e
+ end
+end
 -->8
 -- los
 
 function nil_fun(x,y)
- --spr(48,8*x,8*y)
 end
 
 -- check collision with entities
@@ -608,7 +621,6 @@ function chk_ent(x1,y1)
  for e in all(barrels) do
   if(e.x==x1 and e.y==y1) return e
  end
- return nil
 end
 
 function chk_wall(x,y)
@@ -668,7 +680,6 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
    fun(x1, y1)
   end
  end
- return nil
 end
 
 
@@ -696,7 +707,7 @@ ee5c5333ee5cc55eee5c5333ee5c5333ee515eee0000000010000000000000101000000000000000
 e49449ff666666ffe49449ffe49449ffe511115e0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee555eee49449ffeee555eeeee555eeee5155ee0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee5e5eeeee555eeeee5e5eeee5ee5eeeee5eeee0000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
-eee5e5eeeee5e5eeeee5ee5eee5ee5eeeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
+eee5e5eeeee5e5eeeee5ee5eee5ee55eeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
 eee555eeeeeeeeeeeeeeeeee00000000000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
 ee8585eeeeeeeeeeeeeeeeee00000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 ee55522eeeeeeeeeeee8eeee00000000000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
