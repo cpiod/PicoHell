@@ -202,38 +202,20 @@ function _draw_game()
 	end
 	
  camera(cam_x+player.ox-64,cam_y+player.oy-64) 
- -- unseen map and entities
- for i=0,7 do
-  pal(i,0)
- end
- for i=8,15 do
-  pal(i,5)
- end
+ -- unseen map
+ set_unseen_color()
  map(0,0,0,0)
  
- -- entities
- for e in all(entities) do
-  if(is_visible(e.x,e.y,false,1,1,e.facing>0)) spr(e.sprnb,8*e.x,8*e.y-2)
- end
- 
-  -- barrels
- for b in all(barrels) do
-  if(is_visible(b.x,b.y,false)) spr(4,8*b.x,8*b.y-2)
- end
- 
  -- lit map
- pal()
-  
- palt(0, false)
- palt(14, true)
+ unset_unseen_color()
  light_range=7
  if light_x>0 or light_y>0 then
-  i0,i1=-2,light_range
+  i0,i1=-1,light_range
  else
-  i0,i1=-light_range,2
+  i0,i1=-light_range,1
  end
  for i=i0,i1 do
-  l=max(2,ceil(abs(i)*2/3))
+  l=max(1,ceil(abs(i)*2/3))
   for j=-l,l do
    local x2,y2
    if light_y!=0 then
@@ -247,7 +229,19 @@ function _draw_game()
    end
   end
  end
-   
+
+ set_unseen_color()
+ --  unseen entities
+ for e in all(entities) do
+  if(is_visible(e.x,e.y,false)) spr(e.sprnb,8*e.x,8*e.y-2,1,1,e.x<=player.x)
+ end
+ 
+  -- unseen barrels
+ for b in all(barrels) do
+  if(is_visible(b.x,b.y,false)) spr(4,8*b.x,8*b.y-2)
+ end
+
+ unset_unseen_color()
  -- lit entities
  for i=i0,i1 do
   l=max(2,ceil(abs(i)*2/3))
@@ -274,7 +268,7 @@ function _draw_game()
      if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
     end
     for e in all(entities) do
-     if(e.x==x2 and e.y==y2) spr(e.sprnb+get_sprite_delta(e),e.ox,e.oy-2,1,1,e.facing>0)
+     if(e.x==x2 and e.y==y2) spr(e.sprnb+get_sprite_delta(e),e.ox,e.oy-2,1,1,e.x<=player.x)
     end
     for b in all(barrels) do
      if(b.x==x2 and b.y==y2) spr(4,8*b.x,8*b.y-2)
@@ -298,7 +292,6 @@ function _draw_game()
 --  if(los_line(a_x,a_y,x,y,nil_fun,chk_opaque,true)) s=19
   spr(s,a_x*8,a_y*8-2)
  end
--- los_line(x,y,1,1,los_test,chk_wall)
  
  if(anim) animate()
  
@@ -363,12 +356,6 @@ function draw_bullets()
  end
 end
 
-function los_test(x,y)
--- if fget(mget(x,y))%2==1 then
-  spr(2,player.x*8,player.y*8)
--- end
-end
-
 function get_sprite_delta(e)
  local d=0
  local t=t()--+e.deltatime
@@ -392,6 +379,21 @@ function explode(e)
   return false
  end
  return true
+end
+
+function set_unseen_color()
+ for i=0,7 do
+  pal(i,0)
+ end
+ for i=8,15 do
+  pal(i,5)
+ end
+end
+
+function unset_unseen_color()
+ pal()  
+ palt(0, false)
+ palt(14, true)
 end
 -->8
 -- entity
@@ -421,6 +423,7 @@ weapon_name={"pistol","shotgun","rifle"}
 -- sprnb: sprite number
 function make_weapon(typ)
 	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
+	if(typ==1) return {mag=1,amm=1,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
 	assert(false)
 end
 
@@ -434,7 +437,7 @@ end
 -- rng: preferred range
 
 function make_enemy(typ,x,y)
- if(typ==0) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(0),ent=1,rng=2,deltatime=rnd()}
+ if(typ==0) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(0),ent=1,rng=3,deltatime=rnd()}
 	assert(false)
 end
 
@@ -469,6 +472,7 @@ dep={{-1,0},{1,0},nil,{0,-1},
 nil,nil,nil,{0,1}}
 
 function _update()
+ printh(stat(0).."kb "..(stat(1)*100).."%")
  -- no update during animation
  printh("anim="..tostr(anim))
  if(anim) return
@@ -566,9 +570,18 @@ function _update()
     local w=p_weapons[p_currentw]
     w.amm-=w.bul
 	   anim=true
-	   local vx=(a_x-player.x)
-	   local vy=(a_y-player.y)
-	   shoot(player.x,player.y,a_x,a_y,w)
+	   local d=dist(player.x,player.y,a_x,a_y)
+	   local dmg=w.dmg
+	   if(w.rng<d) dmg=ceil(dmg/3)
+	   local dx,dy=0,0
+	   printh("disp "..w.disp*d)
+	   if(rnd(w.disp*d)>7) dx=1
+	   if(rnd()>0.5) dx*=-1
+	   if(rnd(w.disp*d)>7) dy=1
+	   if(rnd()>0.5) dy*=-1
+	   shoot(player.x,player.y,a_x+dx,a_y+dy,dmg)
+	   local vx=(a_x+dx-player.x)
+	   local vy=(a_y+dy-player.y)
 	   add(bullets,{x0=8*player.x+4,y0=8*player.y+4,vx=vx,vy=vy,dur=10})
 	   state=2 -- end of turn
 	   sfx(0)
@@ -581,7 +594,6 @@ function _update()
   state=0--end turn
   for e in all(entities) do
    local d=dist(player.x,player.y,e.x,e.y)
-   printh(d.." "..abs(player.x-e.x).." "..abs(player.y-e.y))
    if not is_visible(e.x,e.y,true) then
     -- do nothing if player not seen
    elseif d>e.rng then
@@ -606,19 +618,18 @@ function _update()
     end
    else
     printh("enemy attacks")
-   	shoot(e.x,e.y,player.x,player.y,e.wpn)
+   	shoot(e.x,e.y,player.x,player.y,e.wpn.dmg)
    end
   end
  end
  btnstat=new_btnstat
- printh(stat(0).."kb "..(stat(1)*100).."%")
 end
 
 -- shoot from x1,y1 to x2,y2
-function shoot(x1,y1,x2,y2,w)
+function shoot(x1,y1,x2,y2,dmg)
  e=los_line(x1,y1,x2,y2,nil_fun,chk_ent,false)
  if e then
-  damage(e,w.dmg)
+  damage(e,dmg)
  end
 end
 
@@ -790,8 +801,8 @@ e49449ff666666ffe49449ffe49449ffe511115e0000000010000000000000101000000000000000
 eee555eee49449ffeee555eeeee555eeee5155ee0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee5e5eeeee555eeeee5e5eeee5ee5eeeee5eeee0000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
 eee5e5eeeee5e5eeeee5ee5eee5ee55eeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
-eee555eeeeeeeeeeeee555eeeee555ee000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
-ee8585eeeee555eeee8585eeee8585ee000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
+ee5555eeeeeeeeeeee5555eeee5555ee000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
+ee8585eeee5555eeee8585eeee8585ee000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 ee55522eee8585eeee55522eee55522e000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 6666669eee55522e6666669e6666669e000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 e494499e6666669ee494499ee494499e000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
