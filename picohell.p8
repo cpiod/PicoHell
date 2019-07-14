@@ -39,12 +39,13 @@ function _init()
  floor_weapons={}
  decor={}
  soot={}
+ explosion={}
  medkits={make_medkit(4,9)}
  add_blood(5,8)
  entities={make_enemy(0,3,8)}
  add(entities,make_enemy(0,2,8))
  add(entities,make_enemy(0,2,9))
- barrels={make_barrel(2,10)}
+ barrels={make_barrel(5,7)}
  ammo={12,0,0}
  p_weapons={make_weapon(0)}
  p_currentw=1
@@ -159,7 +160,7 @@ camera(0, title_cam_y)
 --spr(64,40,45,7,4)
 spr(64,13,55,7,2)
 spr(96,8+7*8,55,7,2)
-print_center("a jupiter hell demake by cpiod",15*8+1,6,1)
+print_center("a jupiter hell demake by cpiod",15*8+1,6,0)
 local y,d=168,7
 print_center("press 🅾️ to start",80,7,1)
 print_center("controls",y-2*d,7,0)
@@ -177,7 +178,7 @@ end
 function print_center(s,y,c,d)
 -- d because there are "double" symbols
 local x=64-(#s+d)*2
-rectfill(x-1,y-1,x+#s*4+3,y+5,0)
+rectfill(x-1,y-1,x+(#s+d)*4-1,y+5,0)
 print(s,x,y,c)
 end
 
@@ -316,11 +317,16 @@ end
 
 function animate()
  local again=false
+ for e in all(explosion) do
+  again=explode(e) or again
+ end
+ -- if there is an explosion, delay other animation
+-- if(again) return
  if(#bullets>0) draw_bullets() again=true
  for e in all(entities) do
-  again=again or animate_ent(e)
+  again=animate_ent(e) or again
  end
- again=again or animate_ent(player)
+ again=animate_ent(player) or again
  if(not again) anim=false
 end
 
@@ -366,6 +372,17 @@ function get_sprite_delta(e)
   if(flr(t*10)%2==0) d=3
  end
  return d
+end
+
+function explode(e)
+ circfill(e.x,e.y,min(e.rad,100*(t()-e.t)),8)
+ circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.2)),9)
+ circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.6)),0)
+ if 100*(t()-e.t-0.6)>e.rad then
+  del(explosion,e)
+  return false
+ end
+ return true
 end
 -->8
 -- entity
@@ -416,7 +433,7 @@ end
 -- x,y: pos
 -- dmg: damage
 function make_barrel(x,y)
-	return {x=x,y=y,dmg=50,ent=2}
+	return {x=x,y=y,hp=1,dmg=50,ent=2}
 end
 
 -- x,y: pos
@@ -589,18 +606,28 @@ end
 function shoot(x1,y1,x2,y2,w)
  e=los_line(x1,y1,x2,y2,nil_fun,chk_ent,false)
  if e then
-  -- player
-  if e.ent==9 then
-   damage(e,w.dmg)
-   if(player.hp<=0) state=102
-  -- enemy
-  elseif e.ent==1 then
-   damage(e,w.dmg)
-  -- barrel
-  elseif e.ent==2 then
+  damage(e,w.dmg)
+ end
+end
+
+function damage(e,dmg)
+ e.hp-=dmg
+ if e.hp<=0 then
+  if e==player then
+   state=102 --game over
+  elseif(e.ent==1) then
+   del(entities,e)
+   add_blood(e.x,e.y)
+   e.wpn.x=e.x
+   e.wpn.y=e.y
+   add(floor_weapons,e.wpn)
+  elseif e.ent==2 then -- barrel
+   for i=1,5 do
+    add(explosion,{x=8*e.x+rnd(16)-8,y=8*e.y+rnd(16)-8,rad=5+rnd(20),t=t()+rnd(0.3)})
+   end
    del(barrels,e)
-   for i=-2,2 do
-    for j=-2,2 do
+   for i=-3,3 do
+    for j=-3,3 do
      local dmg=flr(e.dmg/(abs(i)+abs(j)+1))
      local x3,y3=e.x+i,e.y+j
      if(not chk_wall(x3,y3) and rnd()>0.4) add_soot(x3,y3)
@@ -608,19 +635,6 @@ function shoot(x1,y1,x2,y2,w)
      if(e2) damage(e2,dmg)
     end
    end
-  end
- end
-end
-
-function damage(e,dmg)
- e.hp-=dmg
- if e.hp<0 then
-  if(e.ent==1) then
-   del(entities,e)
-   add_blood(e.x,e.y)
-   e.wpn.x=e.x
-   e.wpn.y=e.y
-   add(floor_weapons,e.wpn)
   end
  end
 end
