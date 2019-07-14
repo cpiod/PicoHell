@@ -31,6 +31,8 @@ function _init()
 	maxhp=100
 	cam_x=0
 	cam_y=0
+	cam_xc=0
+	cam_yc=0
 	state=100
 	--music(0)
  anim=false
@@ -45,7 +47,7 @@ function _init()
  entities={make_enemy(0,3,8)}
  add(entities,make_enemy(0,2,8))
  add(entities,make_enemy(0,2,9))
- barrels={make_barrel(5,7)}
+ barrels={make_barrel(5,7),make_barrel(7,7),make_barrel(9,7)}
  ammo={12,0,0}
  p_weapons={make_weapon(0)}
  p_currentw=1
@@ -176,7 +178,7 @@ print_center("kill all the demons!",y+9*d,8,0)
 end
 
 function print_center(s,y,c,d)
--- d because there are "double" symbols
+-- d because there are "double" symbols (such as ❎)
 local x=64-(#s+d)*2
 rectfill(x-1,y-1,x+(#s+d)*4-1,y+5,0)
 print(s,x,y,c)
@@ -198,8 +200,8 @@ function _draw_game()
   y0=p[2]
 	 draw_pentacle(2)
 	end
- camera(cam_x+player.ox-64,cam_y+player.oy-64)
- 
+	
+ camera(cam_x+player.ox-64,cam_y+player.oy-64) 
  -- unseen map and entities
  for i=0,7 do
   pal(i,0)
@@ -320,14 +322,21 @@ function animate()
  for e in all(explosion) do
   again=explode(e) or again
  end
- -- if there is an explosion, delay other animation
--- if(again) return
+ again=animate_camera() or again
  if(#bullets>0) draw_bullets() again=true
  for e in all(entities) do
   again=animate_ent(e) or again
  end
  again=animate_ent(player) or again
  if(not again) anim=false
+end
+
+function animate_camera()
+ if(cam_x<cam_xc) cam_x+=4
+ if(cam_x>cam_xc) cam_x-=4
+ if(cam_y<cam_yc) cam_y+=4
+ if(cam_y>cam_yc) cam_y-=4
+ return cam_x!=cam_xc or cam_y!=cam_yc
 end
 
 function animate_ent(e)
@@ -362,10 +371,10 @@ end
 
 function get_sprite_delta(e)
  local d=0
- local t=t()+e.deltatime
+ local t=t()--+e.deltatime
  if 8*e.x==e.ox and 8*e.y==e.oy then
   -- still
-  if(t%1>0.5) d=1
+  if(t%(0.7)>0.35) d=1
  else
   -- moving
   d=2
@@ -491,12 +500,12 @@ function _update()
     anim=true
     state=2 -- end of turn
     -- update camera
-    local cam_xc=d[1]*20
-    local cam_yc=d[2]*20
-    if(cam_x<cam_xc) cam_x+=4
-    if(cam_x>cam_xc) cam_x-=4
-    if(cam_y<cam_yc) cam_y+=4
-    if(cam_y>cam_yc) cam_y-=4
+    cam_xc=d[1]*16
+    cam_yc=d[2]*16
+--    if(cam_x<cam_xc) cam_x+=4
+--    if(cam_x>cam_xc) cam_x-=4
+--    if(cam_y<cam_yc) cam_y+=4
+--    if(cam_y>cam_yc) cam_y-=4
     -- pick up medkits
     for e in all(medkits) do
      if e.x==player.x and e.y==player.y then
@@ -523,13 +532,16 @@ function _update()
      update_facing(a_x-player.x,a_y-player.y)
     end
    end
-  elseif btn(4) then
-   printh(ammo)
+  elseif btn(🅾️) then
    local w=p_weapons[p_currentw]
-   local amount=min(ammo[p_currentw],w.mag-w.amm)
-   ammo[p_currentw]-=amount
-   w.amm+=amount
-   state=2 --end of turn
+   if w.mag!=w.amm then
+    local amount=min(ammo[p_currentw],w.mag-w.amm)
+    ammo[p_currentw]-=amount
+    w.amm+=amount
+    state=2 -- end of turn
+   else
+    -- todo sfx error
+   end
   end
   
  -- player aim
@@ -566,7 +578,7 @@ function _update()
  -- enemy turn  
  elseif state==2 then
   printh("enemy turn")
-  state=0
+  state=0--end turn
   for e in all(entities) do
    local d=dist(player.x,player.y,e.x,e.y)
    printh(d.." "..abs(player.x-e.x).." "..abs(player.y-e.y))
@@ -622,7 +634,7 @@ function damage(e,dmg)
    e.wpn.y=e.y
    add(floor_weapons,e.wpn)
   elseif e.ent==2 then -- barrel
-   for i=1,5 do
+   for i=1,8 do
     add(explosion,{x=8*e.x+rnd(16)-8,y=8*e.y+rnd(16)-8,rad=5+rnd(20),t=t()+rnd(0.3)})
    end
    del(barrels,e)
@@ -795,12 +807,12 @@ eee8882eeee882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeee40000000000000000
 eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
 eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
 eee8882e888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
-eee8882ee22222ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
-eee8882eeeeeeeee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeee8eeee0000000000000000000000000000000000000000000000000000000000000000
-eee8882eeeeeeeee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeee888eee0000000000000000000000000000000000000000000000000000000000000000
-eee8882eeeeeeeee8882ee8888888888eee88888888882eeeeeeeeeeeee8eeee0000000000000000000000000000000000000000000000000000000000000000
-eee8882eeeeeeeee8882ee88888888822ee88888888822eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
-eee8882eeeeeeeee8882ee8888888822eee8888888822eeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
+eee8882ee22222ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeee777775e0000000000000000000000000000000000000000000000000000000000000000
+eee8882eeeeeeeee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeee778775e0000000000000000000000000000000000000000000000000000000000000000
+eee8882eeeeeeeee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeee788875e0000000000000000000000000000000000000000000000000000000000000000
+eee8882eeeeeeeee8882ee8888888888eee88888888882eeeeeeeeeee778775e0000000000000000000000000000000000000000000000000000000000000000
+eee8882eeeeeeeee8882ee88888888822ee88888888822eeeeeeeeeee777775e0000000000000000000000000000000000000000000000000000000000000000
+eee8882eeeeeeeee8882ee8888888822eee8888888822eeeeeeeeeeeee55555e0000000000000000000000000000000000000000000000000000000000000000
 eeee222eeeeeeeeee222eee22222222eeeee22222222eeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000
 e888eeee88eeee888888888eeee888eeeeeeeee888eeeeeeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000
