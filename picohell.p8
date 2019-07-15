@@ -42,22 +42,23 @@ function _init()
 	state=100
 	--music(0)
  anim=false
- player={x=5,y=8,ox=8*5,oy=8*8,hp=maxhp,ent=9,deltatime=rnd()}
+ player={x=5,y=8,ox=8*5,oy=8*8,hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(1)}
  bullets={}
  floor_weapons={}
  decor={}
  soot={}
  explosion={}
  medkits={make_medkit(4,9)}
+ medkits_used={}
 -- add_blood(5,8)
 -- entities={}
- entities={make_enemy(0,3,8)}
+ entities={make_enemy(0,3,7)}
+ add(entities,make_enemy(0,2,7))
  add(entities,make_enemy(0,2,8))
- add(entities,make_enemy(0,2,9))
  barrels={make_barrel(5,7),make_barrel(7,7),make_barrel(9,7)}
  ammo={12,0,0}
- p_weapons={make_weapon(0)}
- p_currentw=1
+-- p_weapons={make_weapon(0)}
+-- p_currentw=1
 end
 
 function show_ctrl()
@@ -177,8 +178,7 @@ print_center("press ⬅️⬆️⬇️➡️ to move",y,6,4)
 print_center("press 🅾️ to shoot",y+2*d,6,1)
 print_center("hold 🅾️ to aim",y+3*d,6,1)
 print_center("press ❎ to reload",y+5*d,6,1)
-print_center("hold ❎ to switch weapon",y+6*d,6,1)
-print_center("hold ⬇️ to grab",y+7*d,6,1)
+print_center("hold ❎ to pick up",y+6*d,6,1)
 print_center("kill all the demons!",y+9*d,8,0)
 --print((stat(32)-64).." "..(stat(33)-64),0,0,11)
 --pset(stat(32),stat(33),11)
@@ -307,28 +307,39 @@ function _draw_game()
  color(3)
  print("♥========"..player.hp.."/"..maxhp,16,1)
  
- print(p_currentw.." "
- ..weapon_name[p_currentw].." "
- ..p_weapons[p_currentw].amm
- .."/"..p_weapons[p_currentw].mag
- .." ("..ammo[p_currentw]..")",
+ print(weapon_name[player.wpn.typ].." "
+ ..player.wpn.amm
+ .."/"..player.wpn.mag
+ .." ("..ammo[player.wpn.typ]..")",
  16,15*8+1)
  flip()
 end
 
 function animate()
- anim=false
- for e in all(explosion) do
-  anim=explode(e) or anim
- end
- anim=animate_camera() or anim
+ anim=animate_camera()
  for bul in all(bullets) do
   anim=draw_bullets(bul) or anim
+ end
+ for e in all(explosion) do
+  anim=explode(e) or anim
  end
  for e in all(entities) do
   anim=animate_ent(e) or anim
  end
  anim=animate_ent(player) or anim
+ for tim in all(medkits_used) do
+  anim=animate_medkit(tim) or anim
+ end
+end
+
+function animate_medkit(tim)
+ if t()-tim<=0.25 then
+  r=(t()-tim)*300
+  circ(player.ox,player.oy,r,12)
+  return true
+ end
+ del(medkit_used,tim)
+ return false
 end
 
 function animate_camera()
@@ -343,11 +354,12 @@ function animate_ent(e)
  local x=e.x*8
  local y=e.y*8
  if e.ox!=x or e.oy!=y then
-  if(x>e.ox) e.ox+=2
-  if(x<e.ox) e.ox-=2
-  if(y>e.oy) e.oy+=2
-  if(y<e.oy) e.oy-=2
-  return true
+  if(x-1>e.ox) e.ox+=4
+  if(x+1<e.ox) e.ox-=4
+  if(y-1>e.oy) e.oy+=4
+  if(y+1<e.oy) e.oy-=4
+--  if(abs(x-e.ox)==1) e.ox=x
+--  if(abs(y-e.oy)==1) e.oy=y
  end
  return false
 end
@@ -443,8 +455,8 @@ weapon_name={"pistol","shotgun","rifle"}
 -- disp: dispersion
 -- sprnb: sprite number
 function make_weapon(typ)
-	if(typ==0) return {mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
-	if(typ==1) return {mag=1,amm=1,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
+	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
+	if(typ==2) return {typ=2,mag=1,amm=1,bul=1,rng=5,dmg=4,disp=1,ent=0,sprnb=71}
 	assert(false)
 end
 
@@ -458,7 +470,7 @@ end
 -- rng: preferred range
 
 function make_enemy(typ,x,y)
- if(typ==0) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(0),ent=1,rng=3,deltatime=rnd()}
+ if(typ==0) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(1),ent=1,rng=3,deltatime=rnd()}
 	assert(false)
 end
 
@@ -542,6 +554,7 @@ function _update()
     for e in all(medkits) do
      if e.x==player.x and e.y==player.y then
       del(medkits,e)
+      add(medkits_used,t())
       printh(maxhp.." "..player.hp.." "..e.hp)
       player.hp=min(maxhp,player.hp+e.hp)
      end
@@ -549,7 +562,7 @@ function _update()
    end
   -- start aim
   elseif btn(5) then
-   if p_weapons[p_currentw].amm == 0 then
+   if player.wpn.amm == 0 then
     -- no ammo !
     sfx(1)
    else
@@ -565,10 +578,10 @@ function _update()
     end
    end
   elseif btn(🅾️) then
-   local w=p_weapons[p_currentw]
+   local w=player.wpn
    if w.mag!=w.amm then
-    local amount=min(ammo[p_currentw],w.mag-w.amm)
-    ammo[p_currentw]-=amount
+    local amount=min(ammo[player.wpn.typ],w.mag-w.amm)
+    ammo[player.wpn.typ]-=amount
     w.amm+=amount
     state=2 -- end of turn
    else
@@ -595,7 +608,7 @@ function _update()
     state=0
    else
     -- successful shot
-    local w=p_weapons[p_currentw]
+    local w=player.wpn
     w.amm-=w.bul
 	   local d=dist(player.x,player.y,a_x,a_y)
 	   local dmg=w.dmg
@@ -833,7 +846,7 @@ ee5c5333ee5cc55eee5c5333ee5c5333ee515eee0000000010000000000000101000000000000000
 e49449ff666666ffe49449ffe49449ffe511115e0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee555eee49449ffeee555eeeee555eeee5155ee0000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee5e5eeeee555eeeee5e5eeee5ee5eeeee5eeee0000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
-eee5e5eeeee5e5eeeee5ee5eee5ee55eeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
+eee5e5eeeee5e5eeeeee55eeee5ee55eeeeeeeee0000000001000000000001000100000000000000000000000000010000000000000000000000000000000000
 ee5555eeeeeeeeeeee5555eeee5555ee000000000000000011000000000001101100000000000000000000000000011000000000000000000000000000000000
 ee8585eeee5555eeee8585eeee8585ee000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 ee55522eee8585eeee55522eee55522e000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
@@ -841,7 +854,7 @@ ee55522eee8585eeee55522eee55522e000000000000000010000000000000101000000000000000
 e494499e6666669ee494499ee494499e000000000000000010000000000000101000000000000000000000000000001000000000000000000000000000000000
 eee555eee494499eeee555eeeee555ee000000000000000010000011100000101000001110000000000000111000001000000000000000000000000000000000
 eee5e5eeeee555eeeee5e5eeee5ee5ee000000000000000011111110111111101111111011111111111111101111111000000000000000000000000000000000
-eee5e5eeeee5e5eeeee5ee5eee5ee55e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+eee5e5eeeee5e5eeeeee55eeee5ee55e000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
 eee888888888eeee888eee8888888888eeeee88888888eeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
 eee8888888888eee8882ee88888888822eee8888888882eeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000000000000000000000000000
