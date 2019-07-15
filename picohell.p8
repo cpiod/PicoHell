@@ -39,6 +39,8 @@ function _init()
 	cam_y=0
 	cam_xc=0
 	cam_yc=0
+	cam_dx=0
+	cam_dy=0
 	state=100
 	--music(0)
  anim=false
@@ -48,6 +50,7 @@ function _init()
  decor={}
  soot={}
  explosion={}
+ blood={}
  medkits={make_medkit(4,9)}
  medkits_used={}
 -- add_blood(5,8)
@@ -208,7 +211,7 @@ function _draw_game()
 	 draw_pentacle(2)
 	end
 	
- camera(cam_x+player.ox-64,cam_y+player.oy-64) 
+ camera(cam_x+cam_dx+player.ox-64,cam_y+cam_dy+player.oy-64) 
  -- unseen map
  set_unseen_color()
  map(0,0,0,0)
@@ -316,19 +319,24 @@ function _draw_game()
 end
 
 function animate()
- anim=animate_camera()
+ anim=false
+ cam_dx,cam_dy=0,0
  for bul in all(bullets) do
   anim=draw_bullets(bul) or anim
  end
  for e in all(explosion) do
   anim=explode(e) or anim
  end
+ anim=animate_camera() or anim
  for e in all(entities) do
   anim=animate_ent(e) or anim
  end
  anim=animate_ent(player) or anim
  for tim in all(medkits_used) do
-  anim=animate_medkit(tim) or anim
+  animate_medkit(tim) -- non-blocking
+ end
+ for e in all(blood) do
+  anim=anim_blood(e) or anim -- non-blocking
  end
 end
 
@@ -395,12 +403,27 @@ function get_sprite_delta(e)
  return d
 end
 
+function anim_blood(e)
+ if e[5]<t() then
+  del(blood,e)
+  return false
+ else
+  e[4]+=0.5
+  e[1]+=e[3]
+  e[2]+=e[4]
+  pset(e[1],e[2],8)
+  return true
+ end
+end
+
 function explode(ex)
+ cam_dx=rnd(4)-2
+ cam_dy=rnd(4)-2
  for e in all(ex[1]) do
-  circfill(e.x,e.y,min(e.rad,100*(t()-e.t)),8)
-  circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.2)),9)
-  circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.6)),0)
-  if 100*(t()-e.t-0.6)>e.rad then
+  circfill(e.x,e.y,min(e.rad,200*(t()-e.t)),8)
+  circfill(e.x,e.y,min(e.rad,200*(t()-e.t-0.1)),9)
+  circfill(e.x,e.y,min(e.rad,200*(t()-e.t-0.3)),0)
+  if 200*(t()-e.t-0.3)>e.rad then
    del(ex[1],e)
   end
  end
@@ -492,14 +515,12 @@ end
 -- sprnb: sprite number
 function add_blood(x,y)
  local l=88
- printh("add_blood")
+-- printh("add_blood")
  for e in all(decor) do
-  printh(e.x.." "..e.y.." "..x.." "..y.." "..e.sprnb)
+--  printh(e.x.." "..e.y.." "..x.." "..y.." "..e.sprnb)
   if(e.x==x and e.y==y) l=min(90,e.sprnb+1) printh(e.sprnb)
  end
  add(decor,{x=x,y=y,sprnb=l,ent=3})
- z=0
- z=1/z
 end
 
 function add_soot(x,y)
@@ -559,6 +580,9 @@ function _update()
       player.hp=min(maxhp,player.hp+e.hp)
      end
     end
+   else
+    player.ox+=4*d[1]
+    player.oy+=4*d[2]
    end
   -- start aim
   elseif btn(5) then
@@ -630,6 +654,7 @@ function _update()
   printh("enemy turn")
   state=0--end turn
   for e in all(entities) do
+   local moved=false
    local d=dist(player.x,player.y,e.x,e.y)
    if not is_visible(e.x,e.y,true) then
     -- do nothing if player not seen
@@ -654,8 +679,10 @@ function _update()
     if can_go(next_x,next_y) then
      e.x=next_x
      e.y=next_y
+     moved=true
     end
-   else
+   end
+   if not moved then
     printh("enemy attacks")
    	shoot(e.x,e.y,player.x,player.y,e.wpn.dmg)
    end
@@ -679,7 +706,17 @@ end
 
 function damage(e,dmg)
  e.hp-=dmg
- if((e.ent==1 or e==player) and rnd()>0.5) add_blood(e.x,e.y)
+ if (e.ent==1 or e==player) then
+  if e.hp<=0 then -- if dead, project blood
+   for i=1,5 do
+    local v=1+rnd(1)
+    local a=rnd(0.5)
+    add(blood,{e.ox+4+rnd(2)-1,e.oy+rnd(2)-1,
+    cos(a)*v,sin(a)*v,t()+0.2+rnd(0.1)})
+   end
+  end
+  add_blood(e.x,e.y)
+ end
  if e.hp<=0 then
   if e==player then
    state=102 --game over
