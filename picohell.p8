@@ -3,6 +3,7 @@ version 18
 __lua__
 -- pico hell
 -- by cpio
+-- this code is licensed gpl3 at https://github.com/pfgimenez/picohell
 
 -- state:
 -- 0: player turn
@@ -27,10 +28,9 @@ __lua__
 
 function _init()
 -- poke(0x5f2d, 1) -- mouse debug
- palt(0, false)
- palt(14, true)
- btnstat=0
- 
+ unset_unseen_color()
+ menuitem(2,"show controls",show_ctrl)
+ o_pressed=false
  -- light direction
 	light_x,light_y=1,1
 	-- player sprite direction
@@ -43,6 +43,7 @@ function _init()
 	cam_dx=0
 	cam_dy=0
 	state=100
+	wait=0
 	--music(0)
  anim=false
  player={x=5,y=8,ox=8*5,oy=8*8,hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(2)}
@@ -59,14 +60,14 @@ function _init()
  entities={make_enemy(0,3,7)}
  add(entities,make_enemy(0,2,7))
  add(entities,make_enemy(0,2,8))
- barrels={make_barrel(5,7),make_barrel(7,7),make_barrel(9,7)}
+ barrels={make_barrel(5,7),make_barrel(7,7),make_barrel(9,6)}
  ammo={12,10,0}
 end
 
 function show_ctrl()
  title_cam_y=128
  old_state=state
- state=102
+ state=101
 end
 
 -->8
@@ -76,9 +77,10 @@ title_cam_y=0
 
 function _draw()
  if(state<100) _draw_game()
- if(state==100 or state==102) _draw_title()
+ if(state==100) _draw_title()
+ if(state==102) _draw_gameover()
  if state==101 then
-  title_cam_y+=1.3
+  title_cam_y+=1
   _draw_title()
   if title_cam_y>=128 then
    state=1
@@ -156,6 +158,12 @@ end
 
 function rotate(x,y)
  return mul*(x*cosa-y*sina)+x0,mul*(x*sina+y*cosa)+y0
+end
+
+function _draw_gameover()
+ cls()
+ anim=false
+ print("oups...")
 end
 
 function _draw_title()
@@ -318,6 +326,7 @@ end
 
 function animate()
  anim=false
+ if(wait>0) wait-=1 anim=true
  cam_dx,cam_dy=0,0
  for bul in all(bullets) do
   anim=draw_bullets(bul) or anim
@@ -360,12 +369,12 @@ function animate_ent(e)
  local x=e.x*8
  local y=e.y*8
  if e.ox!=x or e.oy!=y then
-  if(x-1>e.ox) e.ox+=4
-  if(x+1<e.ox) e.ox-=4
-  if(y-1>e.oy) e.oy+=4
-  if(y+1<e.oy) e.oy-=4
---  if(abs(x-e.ox)==1) e.ox=x
---  if(abs(y-e.oy)==1) e.oy=y
+  if(x-1>e.ox) e.ox+=3
+  if(x+1<e.ox) e.ox-=3
+  if(y-1>e.oy) e.oy+=3
+  if(y+1<e.oy) e.oy-=3
+  if(abs(x-e.ox)==1) e.ox=x
+  if(abs(y-e.oy)==1) e.oy=y
  end
  return false
 end
@@ -478,9 +487,9 @@ weapon_name={"pistol","shotgun","rifle"}
 -- disp: dispersion
 -- sprnb: sprite number
 function make_weapon(typ)
-	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1}
-	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=71,used=1}
-	if(typ==3) return {typ=3,mag=24,amm=6,bul=4,rng=5,dmg=4,disp=2,ent=0,sprnb=71,used=4}
+	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9}
+	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=71,used=1,maxrng=4}
+	if(typ==3) return {typ=3,mag=24,amm=6,bul=4,rng=5,dmg=4,disp=2,ent=0,sprnb=71,used=4,maxrng=9}
 	assert(false)
 end
 
@@ -534,7 +543,7 @@ end
 dep={{-1,0},{1,0},nil,{0,-1},
 nil,nil,nil,{0,1}}
 
-function _update()
+function _update60()
  printh(stat(0).."kb "..(stat(1)*100).."%")
  -- no update during animation
  printh("anim="..tostr(anim))
@@ -542,149 +551,173 @@ function _update()
  
  if state==100 then
   if(btnp()!=0) state=101
- elseif state==101 or state==102 then
+ elseif state==101 then
   if btnp()!=0 then
-   menuitem(2,"show controls",show_ctrl)
    state=0
    music(-1)
   end
- end
- 
- new_btnstat=btn()
--- printh(btnstat.." "..new_btnstat)
  -- player turn
- if state==0 then
-  local d=dep[btnp()]
-  -- move
-  if d!=nil then
-   local next_x=player.x+d[1]
-   local next_y=player.y+d[2]
-   update_facing(d[1],d[2])
-   -- check collision
-   if can_go(next_x,next_y) then
-    player.x=next_x
-    player.y=next_y
-    state=2 -- end of turn
-    -- update camera
-    cam_xc=d[1]*16
-    cam_yc=d[2]*16
-    -- pick up medkits
-    for e in all(medkits) do
-     if e.x==player.x and e.y==player.y then
-      del(medkits,e)
-      add(medkits_used,t())
-      sfx(7)
-      player.hp=min(maxhp,player.hp+e.hp)
-     end
-    end
-   else
-    player.ox+=4*d[1]
-    player.oy+=4*d[2]
-   end
-  -- start aim
-  elseif btn(5) then
-   if player.wpn.amm == 0 then
-    -- no ammo !
-    sfx(8)
-   else
-    state=1
-    local e=closest_enemy(player.x,player.y)
-    if e==nil then
-     a_x=player.x
-     a_y=player.y
-    else
-     a_x=e.x
-     a_y=e.y
-     update_facing(a_x-player.x,a_y-player.y)
-    end
-   end
-  elseif btn(🅾️) then
-   local w=player.wpn
-   if w.mag!=w.amm then
-    local amount=min(ammo[player.wpn.typ],w.mag-w.amm)
-    ammo[player.wpn.typ]-=amount
-    w.amm+=amount
-    state=2 -- end of turn
-    sfx(6)
-   else
-    sfx(8)
-   end
-  end
-  
+ elseif state==0 then
+  player_turn()
  -- player aim
  elseif state==1 then
-  local d=dep[band(btnp(),15)]
-  -- aim
-  if d!=nil then
-   a_x+=d[1]
-   a_y+=d[2]
-   -- orient lamp according to aim
-   local a=a_x-player.x
-   local b=a_y-player.y
-   update_facing(a,b)
-  end
-  if not btn(❎) then
-   -- no self-shot
-   if a_x==player.x and a_y==player.y then
-    sfx(8)
-    state=0
-   else
-    -- successful shot
-    local w=player.wpn
-    w.amm-=w.used
-	   shoot(player.x,player.y,a_x,a_y,player.wpn)
-	   state=2 -- end of turn
-	   sfx(player.wpn.typ-1)
-   end
-  end
-  
+  player_aim()
  -- enemy turn  
  elseif state==2 then
-  printh("enemy turn")
-  state=0--end turn
-  for e in all(entities) do
-   local moved=false
-   local d=dist(player.x,player.y,e.x,e.y)
-   if not is_visible(e.x,e.y,true) then
-    -- do nothing if player not seen
-   elseif d>e.rng then
-    local dx,dy
-    if player.x>e.x then
-     dx=1
-    else
-     dx=-1
-    end
-    if player.y>e.y then
-     dy=1
-    else
-     dy=-1
-    end
-    local next_x,next_y=e.x,e.y
-    if abs(player.x-e.x)>=d/2 and can_go(e.x+dx,e.y) then
-     next_x+=dx
-    elseif abs(player.y-e.y)>=d/2 and can_go(e.x,e.y+dy) then
-     next_y+=dy
-    end
-    if can_go(next_x,next_y) then
-     e.x=next_x
-     e.y=next_y
-     moved=true
-    end
-   end
-   if not moved and d<=e.rng+3 then
-    printh("enemy attacks")
-   	shoot(e.x,e.y,player.x,player.y,e.wpn)
-   	sfx(e.wpn.typ-1)
-   end
+  enemy_turn()
+ end
+end
+
+
+function player_move(d)
+ local next_x=player.x+d[1]
+ local next_y=player.y+d[2]
+ update_facing(d[1],d[2])
+ -- check collision
+ if can_go(next_x,next_y) then
+  -- update coordinates
+  player.x=next_x
+  player.y=next_y
+  state=2 -- end of turn
+  -- update camera
+  cam_xc=d[1]*16
+  cam_yc=d[2]*16
+  -- pick up medkits
+  use_medkit()
+ else
+  -- bump animation
+  player.ox+=3*d[1]
+  player.oy+=3*d[2]
+ end
+end
+
+function use_medkit()
+ for e in all(medkits) do
+  if e.x==player.x and e.y==player.y then
+   del(medkits,e)
+   add(medkits_used,t())
+   sfx(7)
+   player.hp=min(maxhp,player.hp+e.hp)
   end
  end
- btnstat=new_btnstat
+end
+
+function player_start_aim()
+ if player.wpn.amm == 0 then
+  -- no ammo !
+  sfx(8)
+ else
+  state=1 -- start aim
+  local e=closest_enemy(player.x,player.y)
+  if(e==nil) e=player
+  a_x,a_y=e.x,e.y
+  update_facing(a_x-player.x,a_y-player.y)
+ end
+end
+
+function player_turn()
+ local d=dep[btnp()]
+ -- move
+ if d!=nil then
+  player_move(d)
+ -- start aim
+ elseif btnp(❎) then
+  player_start_aim()
+ elseif btnp(🅾️) then
+  local w=player.wpn
+  -- reload
+  if w.mag!=w.amm then
+   local amount=min(ammo[player.wpn.typ],w.mag-w.amm)
+   ammo[player.wpn.typ]-=amount
+   w.amm+=amount
+   state=2 -- end of turn
+   wait=30
+   sfx(6)
+  else
+   sfx(8)
+  end
+ end
+end
+
+function player_aim()
+ local d=dep[band(btnp(),15)]
+ -- aim
+ if d!=nil then
+  a_x+=d[1]
+  a_y+=d[2]
+  -- orient lamp according to aim
+  update_facing(a_x-player.x,a_y-player.y)
+ end
+ -- no more hold
+ if not btn(❎) then
+  -- no self-shot
+  if a_x==player.x and a_y==player.y then
+   sfx(8)
+   state=0
+  else
+   -- successful shot
+   local w=player.wpn
+   w.amm-=w.used
+   shoot(player.x,player.y,a_x,a_y,player.wpn)
+   state=2 -- end of turn
+   sfx(player.wpn.typ-1)
+  end
+ end
+end
+
+function enemy_turn()
+ printh("enemy turn")
+ state=0--end turn
+ for e in all(entities) do
+  local moved=false
+  local d=dist(player.x,player.y,e.x,e.y)
+  if not is_visible(e.x,e.y,true) then
+   -- do nothing if player not seen
+  elseif d>e.rng then
+   moved=enemy_move(e)
+  end
+  if not moved and d<=e.rng+3 then
+   printh("enemy attacks")
+  	shoot(e.x,e.y,player.x,player.y,e.wpn)   	sfx(e.wpn.typ-1)
+  end
+ end
+end
+
+function enemy_move(e)
+ local dx,dy
+ if player.x>e.x then
+  dx=1
+ else
+  dx=-1
+ end
+ if player.y>e.y then
+  dy=1
+ else
+  dy=-1
+ end
+ local next_x,next_y=e.x,e.y
+ if abs(player.x-e.x)>=d/2 and can_go(e.x+dx,e.y) then
+  next_x+=dx
+ elseif abs(player.y-e.y)>=d/2 and can_go(e.x,e.y+dy) then
+  next_y+=dy
+ end
+ if can_go(next_x,next_y) then
+  e.x=next_x
+  e.y=next_y
+  return true
+ end
+ return false
 end
 
 -- shoot from x1,y1 to x2,y2
 function shoot(x1,y1,x2,y2,w)
+ printh("a"..x1.." "..y1.." "..x2.." "..y2)
+ local d=sqrt((x2-x1)^2+(y2-y1)^2)
+ cosa=(x2-x1)/d
+ sina=(y2-y1)/d
+ x2=flr(x1+cosa*w.maxrng+0.5)
+ y2=flr(y1+sina*w.maxrng+0.5)
  for i=1,w.bul do
- 	local d=dist(x1,y1,x2,y2)
   local dmg=w.dmg
   if(w.rng<d) dmg=ceil(dmg/3)
   local dx,dy=0,0
@@ -692,22 +725,23 @@ function shoot(x1,y1,x2,y2,w)
   if(rnd()>0.5) dx*=-1
   if(rnd(w.disp*d)>7) dy=1
   if(rnd()>0.5) dy*=-1
-  x2+=dx
-  y2+=dy
+  x3=x2+dx
+  y3=y2+dy
   local b={{},{}}
-  e=los_line(x1,y1,x2,y2,nil_fun,chk_ent_and_wall,false)
+  printh("b"..x1.." "..y1.." "..x3.." "..y3)
+  e=los_line(x1,y1,x3,y3,chk_ent_and_wall,false)
   if e then
-   x2=e.x
-   y2=e.y
-   add(b[2],{e,dmg})  
+   x3=e.x
+   y3=e.y
+   add(b[2],{e,dmg})
   end
   local speed=3
-  x2+=(rnd(4)-2)/8
-  y2+=(rnd(4)-2)/8
-  local d=sqrt((x2-x1)^2+(y2-y1)^2)
-  local vx=speed*(x2-x1)/d
-  local vy=speed*(y2-y1)/d
-  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed})
+  x3+=(rnd(6)-3)/8
+  y3+=(rnd(6)-3)/8
+  local d=sqrt((x3-x1)^2+(y3-y1)^2)
+  local vx=speed*(x3-x1)/d/2
+  local vy=speed*(y3-y1)/d/2
+  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed*2})
   add(bullets,b)
  end
 end
@@ -716,7 +750,7 @@ function damage(e,dmg)
  if(not e.hp) return
  e.hp-=dmg
  if (e.ent==1 or e==player) then
-  if(e==player) sfx(4)
+  --if(e==player) sfx(4)
   if e.hp<=0 then -- if dead, project blood
    for i=1,5 do
     local v=1+rnd(1)
@@ -794,10 +828,7 @@ function get_floor_weapon()
  end
 end
 -->8
--- los
-
-function nil_fun(x,y)
-end
+-- line of sight
 
 -- check collision with entities
 function chk_ent(x1,y1)
@@ -825,10 +856,10 @@ function chk_opaque(x,y)
 end
 
 function is_visible(x2,y2,chk_last)
- return not los_line(x2,y2,player.x,player.y,nil_fun,chk_opaque,chk_last)
+ return not los_line(x2,y2,player.x,player.y,chk_opaque,chk_last)
 end
 
-function los_line(x1, y1, x2, y2, fun, chk, chk_first)
+function los_line(x1, y1, x2, y2, chk, chk_first)
  delta_x = x2 - x1
  ix = delta_x > 0 and 1 or -1
  delta_x = 2 * abs(delta_x)
@@ -839,7 +870,7 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
  
  local b=chk(x1,y1)
  if(chk_first and b) return b
- fun(x1, y1)
+-- fun(x1, y1)
  
  if delta_x >= delta_y then
   error = delta_y - delta_x / 2
@@ -855,7 +886,7 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
 
    local b=chk(x1,y1)
    if(b) return b
-   fun(x1, y1)
+--   fun(x1, y1)
   end
  else
   error = delta_x - delta_y / 2
@@ -870,7 +901,7 @@ function los_line(x1, y1, x2, y2, fun, chk, chk_first)
    y1 = y1 + iy
    local b=chk(x1,y1)
    if(b) return b
-   fun(x1, y1)
+--   fun(x1, y1)
   end
  end
 end
@@ -984,9 +1015,9 @@ __sfx__
 000500002c6502e650116100c6100b620156302c6403f6503f6503e6503e6503e6503d6503b65036650326502f65026650216401e6401b64018630136300e6300963007620056200362000620006000060000600
 000300000e3400b340093300733005320033200231000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 0003000007350053500435003350023500e3500b35005350023500135001350003500035000350003500030000300003000030000300003000030000300003000030000300003000030000300003000030000300
-00040000236002360002600026002c6002c6002c60002600026000260002600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600006000060000600
+0008000011e5019e5025e5011e0008e001de5019e500ae5018e0019e0019e001be001de001ee0021e0022e0024e0029e002ae002de002fe0030e000be0009e000ae0000e0000e0000e0000e0000e0000e0000e00
 0008000038f7033f6038f5031f5038f5033f5038f4032f3038f3032f3025f0038f0038f0038f0038f0038f0000f0000f0000f0000f0000f0000f0000f0000f0000f0000f003ff0000f0000f0000f0000f0000f00
-001300002825004230052000220002200342000020000200142000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200
+001200000425000200032000220002200342000020000200142000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200002000020000200
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 001a00000005000050000500505000050000500005000050000500005000050000500005000050060500005006050000500005000050000500005000050000500305000050000500005000050000500005000050
 001a00000061000610006100061000610006100061000610006100161001610016100161001610006100061000610006100061000610006100061001610006100061000610006100061000610006100161000610
