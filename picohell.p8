@@ -61,7 +61,7 @@ function _init()
 -- entities={}
  entities={make_enemy(0,3,7)}
  add(entities,make_enemy(1,2,7))
- add(entities,make_enemy(0,2,8))
+ add(entities,make_enemy(2,2,8))
  barrels={make_barrel(7,7),make_barrel(9,6)}
  ammo={12,10,0}
  max_ammo={50,30,100}
@@ -388,11 +388,15 @@ end
 
 function draw_bullets(bul)
  for b in all(bul[1]) do
-  pset(b.x0,b.y0,6)
-  b.x0+=b.vx
-  b.y0+=b.vy
-  b.dur-=1
-  if(b.dur<=0) del(bul[1],b)
+  if b.delay>0 then
+   b.delay-=1
+  else
+   pset(b.x0,b.y0,6)
+   b.x0+=b.vx
+   b.y0+=b.vy
+   b.dur-=1
+   if(b.dur<=0) del(bul[1],b)
+  end
  end
  if #bul[1]==0 then
   for param in all(bul[2]) do
@@ -512,9 +516,9 @@ weapon_name={"pistol","shotgun","rifle"}
 -- disp: dispersion
 -- sprnb: sprite number
 function make_weapon(typ)
-	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9}
-	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4}
-	if(typ==3) return {typ=3,mag=24,amm=6,bul=4,rng=5,dmg=4,disp=2,ent=0,sprnb=73,used=4,maxrng=9}
+	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0}
+	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0}
+	if(typ==3) return {typ=3,mag=24,amm=24,bul=4,rng=5,dmg=4,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=3}
 	assert(false)
 end
 
@@ -536,6 +540,7 @@ end
 function make_enemy(typ,x,y)
  if(typ==0) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(1),ent=1,rng=3,deltatime=rnd()}
  if(typ==1) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(2),ent=1,rng=3,deltatime=rnd()}
+ if(typ==2) return {facing=1,sprnb=48,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(3),ent=1,rng=3,deltatime=rnd()}
 	assert(false)
 end
 
@@ -651,7 +656,7 @@ function use_medkit()
 end
 
 function player_start_aim()
- if player.wpn.amm == 0 then
+ if player.wpn.amm<player.wpn.used then
   -- no ammo !
   add_msg("reload!")
   sfx(8)
@@ -697,16 +702,19 @@ function player_turn()
  elseif o_pressed and not btn(🅾️) then
   -- reload
   local w=player.wpn
-  if w.mag!=w.amm then
+  if w.mag!=w.amm and ammo[player.wpn.typ]>0 then
    local amount=min(ammo[player.wpn.typ],w.mag-w.amm)
    ammo[player.wpn.typ]-=amount
    w.amm+=amount
    state=2 -- end of turn
    wait=30
    sfx(6)
-  else
+  elseif w.mag==w.amm then
    add_msg("full!")
    sfx(8)
+  else
+    add_msg("no ammo!")
+    sfx(8)
   end 
 	 o_pressed=nil
  end
@@ -795,7 +803,7 @@ function shoot(x1,y1,x2,y2,w)
  sina=(y2-y1)/d
  x2=flr(x1+cosa*w.maxrng+0.5)
  y2=flr(y1+sina*w.maxrng+0.5)
- for i=1,w.bul do
+ for i=0,w.bul-1 do
   local dmg=w.dmg
   if(w.rng<d) dmg=ceil(dmg/3)
   local dx,dy=0,0
@@ -818,7 +826,7 @@ function shoot(x1,y1,x2,y2,w)
   local d=sqrt((x3-x1)^2+(y3-y1)^2)
   local vx=speed*(x3-x1)/d/2
   local vy=speed*(y3-y1)/d/2
-  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed*2})
+  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed*2,delay=w.delay*i})
   add(bullets,b)
  end
 end
