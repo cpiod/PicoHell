@@ -36,6 +36,7 @@ function _init()
 	-- player sprite direction
 	facing=1
 	maxhp=100
+	maxarm=100
 	warn_low=false
 	mesgs={}
 	cam_x=0
@@ -48,20 +49,22 @@ function _init()
 	wait=0
 --	music(1)
  anim=false
- player={x=5,y=8,ox=8*5,oy=8*8,hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3)}
+ player={x=5,y=8,ox=8*5,oy=8*8,hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0}
  bullets={}
  floor_weapons={}
+ add(floor_weapons,make_medkit(4,9))
+ add(floor_weapons,make_armor(3,9))
  decor={}
  soot={}
  explosion={}
  blood={}
- medkits={make_medkit(4,9)}
  medkits_used={}
 -- add_blood(5,8)
 -- entities={}
- entities={make_enemy(0,3,7)}
- add(entities,make_enemy(1,2,7))
- add(entities,make_enemy(2,2,8))
+ entities={}
+-- add(entities,make_enemy(0,3,7))
+-- add(entities,make_enemy(1,2,7))
+-- add(entities,make_enemy(2,2,8))
  barrels={make_barrel(7,7),make_barrel(9,6)}
  ammo={12,10,0}
  max_ammo={50,30,100}
@@ -291,9 +294,6 @@ function _draw_game()
     for e in all(floor_weapons) do
      if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
     end
-    for e in all(medkits) do
-     if(e.x==x2 and e.y==y2) spr(e.sprnb,8*e.x,8*e.y-2)
-    end
     for e in all(entities) do
      if(e.x==x2 and e.y==y2) then
       spr(e.sprnb+get_sprite_delta(e),e.ox,e.oy-2,1,1,e.x<=player.x)
@@ -327,7 +327,7 @@ function _draw_game()
  -- health bar
  color(3)
  print("♥======== "..player.hp.."/"..maxhp,16,1)
- 
+ if(player.arm>0) print("armor "..player.arm,90,1)
  print(weapon_name[player.wpn.typ].." "
  ..player.wpn.amm
  .."/"..player.wpn.mag
@@ -478,23 +478,24 @@ function unset_unseen_color()
  palt(14, true)
 end
 
-function add_msg(msg,c,x,y,v)
+function add_msg(msg,c,c2,x,y,v)
  if(c==nil) c=7
  if(x==nil) x=player.ox
  if(y==nil) y=player.oy
  if(v==nil) v=1
- add(mesgs,{msg,10,c,x,y,v})
+ if(c2==nil) c2=1
+ add(mesgs,{msg,16,c,x,y,v,c2})
 end
 
 function print_float(msg)
- if msg[2]==0 then
+ if msg[2]<=0 then
   del(mesgs,msg)
  else
   local x,y=msg[4],msg[5]
   msg[2]-=msg[6]
   for i=1,0,-1 do
    for j=1,0,-1 do
-    local c=1
+    local c=msg[7]
     if(i+j==0) c=msg[3]
     print(msg[1],x+4-#msg[1]*2+i,y-10+msg[2]/2+j,c)
    end
@@ -511,6 +512,8 @@ end
 -- 3: decoration
 -- 4: wall
 -- 5: ammo
+-- 6: medkit
+-- 7: armor
 -- 9: player
 
 -- weapons type:
@@ -569,8 +572,15 @@ end
 -- x,y: pos
 -- hp: hp gain
 function make_medkit(x,y)
- return {x=x,y=y,hp=50,sprnb=87}
+ return {x=x,y=y,hp=50,sprnb=87,ent=6}
 end
+
+-- x,y: pos
+-- arm: arm gain
+function make_armor(x,y)
+ return {x=x,y=y,sprnb=3,ent=7,arm=50}
+end
+
 
 -- decorative struct:
 -- x,y: pos
@@ -611,7 +621,7 @@ function _update60()
  -- player turn
  elseif state==0 then
   if not warn_low and player.hp<20 then
-   add_msg("low hp!",8)
+   add_msg("low hp!",8,9)
    warn_low=true
   end
   player_turn()
@@ -640,12 +650,26 @@ function player_move(d)
   cam_yc=d[2]*16
   -- pick up medkits
   use_medkit()
+  -- pick up armor
+  pickup_armor()
   -- pick up ammo
   pickup_ammo()
  else
   -- bump animation
   player.ox+=3*d[1]
   player.oy+=3*d[2]
+ end
+end
+
+function pickup_armor()
+ for e in all(floor_weapons) do
+  if e.ent==7 and e.x==player.x and e.y==player.y and player.arm<maxarm then
+   del(floor_weapons,e)
+   sfx(5)
+   local old=player.arm
+   player.arm=min(maxarm,player.arm+e.arm)
+   add_msg("+"..tostr(player.arm-old).." armor",11,3)
+  end
  end
 end
 
@@ -661,14 +685,14 @@ function pickup_ammo()
 end
 
 function use_medkit()
- for e in all(medkits) do
-  if e.x==player.x and e.y==player.y and player.hp<maxhp then
-   del(medkits,e)
+ for e in all(floor_weapons) do
+  if e.ent==6 and e.x==player.x and e.y==player.y and player.hp<maxhp then
+   del(floor_weapons,e)
    add(medkits_used,t())
    sfx(7)
    local old=player.hp
    player.hp=min(maxhp,player.hp+e.hp)
-   add_msg("+"..tostr(player.hp-old).." hp",12)
+   add_msg("+"..tostr(player.hp-old).." hp",12,1)
    warn_low=false
   end
  end
@@ -849,9 +873,14 @@ end
 function damage(e,dmg)
  -- can't die (wall) or already dead
  if(not e.hp or e.hp<=0) return
- add_msg("-"..tostr(dmg).." hp",9,e.ox,e.oy,2)
+ if(e.ent==1 or e==player) add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,2) add_blood(e.x,e.y)
+ if e.arm then
+  local arm_dmg=min(e.arm,dmg)
+  e.arm-=arm_dmg
+  dmg-=arm_dmg
+  printh(arm_dmg,dmg)
+ end
  e.hp-=dmg
- if(e.ent==1 or e==player) add_blood(e.x,e.y)
  if e.hp<=0 then
   -- if dead, project blood
   if e==player or e.ent==1 then
@@ -1027,14 +1056,14 @@ end
 
 
 __gfx__
-0000000077777721eeeeeeee0000000000000000000000001111111011111110ee888eeeee999eee0000000000000000ee5555eeeeeeeeeeee5555eeee5555ee
-00000000776666d2eeeeeeee0000000000000000000000001000001110000010e82228eee90009ee0000000000000000ee8585eeee5555eeee8585eeee8585ee
-00700700766667d2eeeeeeee0000000000000000000000001000000000000010e822281ee900091e0000000000000000ee55522eee8585eeee55522eee55522e
-00077000766766d1eeeeeeee0000000000000000000000001000000000000010e888981ee999a91e0000000000000000ee66659eee55522eee66659eee66659e
-00077000767666d1eeeeeeee0000000000000000000000001000000000000010e888881ee999991e0000000000000000ee95999eee66659eee95999ee995999e
-00700700766666d1ee11111e0000000000000000000000001000000000000010e888981ee999a91e0000000000000000ee9555eeee95999eee9555eeeee555ee
-000000002dddddd1e11111110000000000000000000000001100000000000110e888981ee999a91e0000000000000000eee5e5eeee9555eeeee5e5eeee5ee5ee
-0000000022211111ee11111e0000000000000000000000000100000000000100ee8881eeee9991ee0000000000000000eee5e5eeeee5e5eeeeee55eeee5ee55e
+0000000077777721eeeeeeeeeeeeeeee00000000000000001111111011111110ee888eeeee999eee0000000000000000ee5555eeeeeeeeeeee5555eeee5555ee
+00000000776666d2eeeeeeee333ee33300000000000000001000001110000010e82228eee90009ee0000000000000000ee8585eeee5555eeee8585eeee8585ee
+00700700766667d2eeeeeeee3eeeeee300000000000000001000000000000010e822281ee900091e0000000000000000ee55522eee8585eeee55522eee55522e
+00077000766766d1eeeeeeeeee3ee3ee00000000000000001000000000000010e888981ee999a91e0000000000000000ee66659eee55522eee66659eee66659e
+00077000767666d1eeeeeeeee333333e00000000000000001000000000000010e888881ee999991e0000000000000000ee95999eee66659eee95999ee995999e
+00700700766666d1ee11111ee333333e00000000000000001000000000000010e888981ee999a91e0000000000000000ee9555eeee95999eee9555eeeee555ee
+000000002dddddd1e1111111ee3333ee00000000000000001100000000000110e888981ee999a91e0000000000000000eee5e5eeee9555eeeee5e5eeee5ee5ee
+0000000022211111ee11111eeeeeeeee00000000000000000100000000000100ee8881eeee9991ee0000000000000000eee5e5eeeee5e5eeeeee55eeee5ee55e
 00000000eee3eeeeeeeeeeeeeeeeeeee00000000000000001100000000000110eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5555eeeeeeeeeeee5555eeee5555ee
 00000000ee333eeeee555eeeee888eee00000000000000001000000000000010eee5eeeeeeee5eeeeee5eeeeeeee5eeeee8585eeee5555eeee8585eeee8585ee
 00000000e3eee3eee5eee5eee8eee8ee00000000000000001000000000000010ee515eeeeee515eeee5155eeee5515eeee55522eee8585eeee55522eee55522e
