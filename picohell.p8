@@ -62,9 +62,9 @@ function _init()
 -- add_blood(5,8)
 -- entities={}
  entities={}
--- add(entities,make_enemy(0,3,7))
--- add(entities,make_enemy(1,2,7))
--- add(entities,make_enemy(2,2,8))
+ add(entities,make_enemy(0,3,7))
+ add(entities,make_enemy(1,2,7))
+ add(entities,make_enemy(2,2,8))
  barrels={make_barrel(7,7),make_barrel(9,6)}
  ammo={12,10,0}
  max_ammo={50,30,100}
@@ -399,7 +399,11 @@ function draw_bullets(bul)
   if b.delay>0 then
    b.delay-=1
   else
-   pset(b.x0,b.y0,6)
+   if b.bulspr then
+    spr(b.bulspr,b.x0-4,b.y0-4,1,1,flr(shr(b.dur,1)%2)==0,flr(shr(b.dur,2)%2)==0)
+   else
+    pset(b.x0,b.y0,6)
+   end
    b.x0+=b.vx
    b.y0+=b.vy
    b.dur-=1
@@ -534,9 +538,10 @@ weapon_name={"pistol","combat shotgun","assault rifle"}
 -- disp: dispersion
 -- sprnb: sprite number
 function make_weapon(typ)
-	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0}
-	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0}
-	if(typ==3) return {typ=3,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=3}
+	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0,drp=true}
+	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0,drp=true}
+	if(typ==3) return {typ=3,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=3,drp=true}
+	if(typ==4) return {typ=4,mag=100,amm=100,bul=1,rng=5,dmg=10,disp=1,ent=0,used=1,maxrng=9,delay=0,bulspr=10}
 	assert(false)
 end
 
@@ -558,7 +563,7 @@ end
 function make_enemy(typ,x,y)
  if(typ==0) return {facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(1),ent=1,rng=3,deltatime=rnd()}
  if(typ==1) return {facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(2),ent=1,rng=3,deltatime=rnd()}
- if(typ==2) return {facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(3),ent=1,rng=3,deltatime=rnd()}
+ if(typ==2) return {facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(4),ent=1,rng=3,deltatime=rnd()}
 	assert(false)
 end
 
@@ -865,7 +870,7 @@ function shoot(x1,y1,x2,y2,w)
   local d=sqrt((x3-x1)^2+(y3-y1)^2)
   local vx=speed*(x3-x1)/d/2
   local vy=speed*(y3-y1)/d/2
-  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed*2,delay=w.delay*i})
+  add(b[1],{x0=8*x1+4,y0=8*y1+4,vx=vx,vy=vy,dur=d*8/speed*2,delay=w.delay*i,bulspr=w.bulspr})
   add(bullets,b)
  end
 end
@@ -896,12 +901,14 @@ function damage(e,dmg)
 --   wait=120
   elseif(e.ent==1) then
    del(entities,e)
-   local x,y=get_empty_tile(e.x,e.y)
-   e.wpn.x=x
-   e.wpn.y=y
-   add(floor_weapons,e.wpn)
-   x,y=get_empty_tile(e.x,e.y)
-   add(floor_weapons,make_ammo(e.wpn,x,y))
+   if e.wpn.drp then
+    local x,y=get_empty_tile(e.x,e.y)
+    e.wpn.x=x
+    e.wpn.y=y
+    add(floor_weapons,e.wpn)
+    x,y=get_empty_tile(e.x,e.y)
+    add(floor_weapons,make_ammo(e.wpn,x,y))
+   end
   elseif e.ent==2 then -- barrel
    local ex={{},{}}
    add(explosion,ex)
@@ -1056,14 +1063,14 @@ end
 
 
 __gfx__
-0000000077777721eeeeeeeeeeeeeeee00000000000000001111111011111110ee888eeeee999eee0000000000000000ee5555eeeeeeeeeeee5555eeee5555ee
-00000000776666d2eeeeeeee333ee33300000000000000001000001110000010e82228eee90009ee0000000000000000ee8585eeee5555eeee8585eeee8585ee
-00700700766667d2eeeeeeee3eeeeee300000000000000001000000000000010e822281ee900091e0000000000000000ee55522eee8585eeee55522eee55522e
-00077000766766d1eeeeeeeeee3ee3ee00000000000000001000000000000010e888981ee999a91e0000000000000000ee66659eee55522eee66659eee66659e
-00077000767666d1eeeeeeeee333333e00000000000000001000000000000010e888881ee999991e0000000000000000ee95999eee66659eee95999ee995999e
-00700700766666d1ee11111ee333333e00000000000000001000000000000010e888981ee999a91e0000000000000000ee9555eeee95999eee9555eeeee555ee
-000000002dddddd1e1111111ee3333ee00000000000000001100000000000110e888981ee999a91e0000000000000000eee5e5eeee9555eeeee5e5eeee5ee5ee
-0000000022211111ee11111eeeeeeeee00000000000000000100000000000100ee8881eeee9991ee0000000000000000eee5e5eeeee5e5eeeeee55eeee5ee55e
+0000000077777721eeeeeeeeeeeeeeee00000000000000001111111011111110ee888eeeee999eeeeeeeeeee00000000ee5555eeeeeeeeeeee5555eeee5555ee
+00000000776666d2eeeeeeee333ee33300000000000000001000001110000010e82228eee90009eeeee88eee00000000ee8585eeee5555eeee8585eeee8585ee
+00700700766667d2eeeeeeee3eeeeee300000000000000001000000000000010e822281ee900091eee8998ee00000000ee55522eee8585eeee55522eee55522e
+00077000766766d1eeeeeeeeee3eebee00000000000000001000000000000010e888981ee999a91ee88aa88e00000000ee66659eee55522eee66659eee66659e
+00077000767666d1eeeeeeeee3333b3e00000000000000001000000000000010e888881ee999991ee899a98e00000000ee95999eee66659eee95999ee995999e
+00700700766666d1ee11111ee333333e00000000000000001000000000000010e888981ee999a91eee8898ee00000000ee9555eeee95999eee9555eeeee555ee
+000000002dddddd1e1111111ee3333ee00000000000000001100000000000110e888981ee999a91eeee88eee00000000eee5e5eeee9555eeeee5e5eeee5ee5ee
+0000000022211111ee11111eeeeeeeee00000000000000000100000000000100ee8881eeee9991eeeeeeeeee00000000eee5e5eeeee5e5eeeeee55eeee5ee55e
 00000000eee3eeeeeeeeeeeeeeeeeeee00000000000000001100000000000110eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5555eeeeeeeeeeee5555eeee5555ee
 00000000ee333eeeee555eeeee888eee00000000000000001000000000000010eee5eeeeeeee5eeeeee5eeeeeeee5eeeee8585eeee5555eeee8585eeee8585ee
 00000000e3eee3eee5eee5eee8eee8ee00000000000000001000000000000010ee515eeeeee515eeee5155eeee5515eeee55522eee8585eeee55522eee55522e
