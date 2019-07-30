@@ -29,8 +29,9 @@ __lua__
 function _init()
 -- poke(0x5f2d, 1) -- mouse debug
  unset_unseen_color()
- menuitem(2,"show controls",show_ctrl)
+-- menuitem(2,"show controls",show_ctrl)
  o_pressed=nil
+ visibility_radius=5
  -- light direction
 	light_x,light_y=1,1
 	-- player sprite direction
@@ -229,11 +230,12 @@ function _draw_game()
  map(0,0,0,0,32,32)
 
  unset_unseen_color()
- for x=0,31 do
-  for y=0,31 do
+ for x=max(0,player.x-visibility_radius),min(player.x+visibility_radius,31) do
+  for y=max(0,player.y-visibility_radius),min(player.y+visibility_radius,31) do
    if(is_seen({x=x,y=y})) map(x,y,8*x,8*y,1,1)
   end
  end
+ 
  for d in all(soot) do
   if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
  end
@@ -252,6 +254,7 @@ function _draw_game()
  for b in all(barrels) do
   if(is_seen(b)) set_color(b) spr(b.sprnb,8*b.x,8*b.y-2)
  end
+ 
  unset_unseen_color()
  -- player
  d=get_sprite_delta(player)
@@ -278,9 +281,11 @@ function _draw_game()
  print(weapon_name[player.wpn.typ].." "
  ..player.wpn.amm
  .."/"..player.wpn.mag
- .." ("..ammo[player.wpn.typ]..")",
+ .." ("..ammo[player.wpn.ammtyp]..")",
  16,15*8+1)
+ print(stat(0).."kb "..(stat(1)*100).."%",1,16)
  flip()
+
 end
 
 function animate()
@@ -301,7 +306,7 @@ function animate()
   animate_medkit(tim) -- non-blocking
  end
  for e in all(blood) do
-  anim=anim_blood(e) or anim -- non-blocking
+  anim_blood(e) -- non-blocking
  end
  for e in all(mesgs) do
   print_float(e)
@@ -324,6 +329,7 @@ function animate_camera()
  if(cam_x>cam_xc) cam_x-=ceil((cam_x-cam_xc)/4)
  if(cam_y<cam_yc) cam_y+=ceil((cam_yc-cam_y)/4)
  if(cam_y>cam_yc) cam_y-=ceil((cam_y-cam_yc)/4)
+ if(cam_x!=cam_xc or cam_y!=cam_yc) printh("animate camera")
  return cam_x!=cam_xc or cam_y!=cam_yc
 end
 
@@ -337,12 +343,15 @@ function animate_ent(e)
   if(y+1<e.oy) e.oy-=3
   if(abs(x-e.ox)==1) e.ox=x
   if(abs(y-e.oy)==1) e.oy=y
+  printh("animate ent")
+  return true
  end
  return false
 end
 
 function draw_bullets(bul)
  for b in all(bul[1]) do
+  printh("animate bullets")
   if b.delay>0 then
    b.delay-=1
   else
@@ -411,6 +420,7 @@ function explode(ex)
   del(explosion,ex)
   return false
  end
+ printh("animate explosion")
  return true
 end
 
@@ -486,17 +496,19 @@ weapon_name={"pistol","combat shotgun","assault rifle"}
 -- x,y: position (if on floor)
 -- amm: current ammo in magazine
 -- mag: magazine size
+-- ammtyp: ammo type
 -- bul: bullet per shot
 -- used: ammo per shot
 -- rng: max range
 -- dmg: damage
 -- disp: dispersion
 -- sprnb: sprite number
+-- delay: delay between to bullets in the same attack
 function make_weapon(typ)
-	if(typ==1) return {typ=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0,drp=true}
-	if(typ==2) return {typ=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0,drp=true}
-	if(typ==3) return {typ=3,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=3,drp=true}
-	if(typ==4) return {typ=4,mag=100,amm=100,bul=1,rng=5,dmg=10,disp=1,ent=0,used=1,maxrng=9,delay=0,bulspr=10}
+	if(typ==1) return {typ=1,ammtyp=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0,drp=true}
+	if(typ==2) return {typ=2,ammtyp=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0,drp=true}
+	if(typ==3) return {typ=3,ammtyp=1,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=1,drp=true}
+	if(typ==4) return {typ=4,ammtyp=0,mag=100,amm=100,bul=1,rng=5,dmg=10,disp=1,ent=0,used=1,maxrng=9,delay=0,bulspr=10}
 	assert(false,typ)
 end
 
@@ -513,9 +525,8 @@ function make_floor_ammo(x,y,typ)
 end
 
 function make_ammo(x,y,typ)
- if(typ==1) return {typ=1,ammo=6,sprnb=74,ent=5,x=x,y=y}
+ if(typ==1) return {typ=1,ammo=12,sprnb=74,ent=5,x=x,y=y}
  if(typ==2) return {typ=2,ammo=4,sprnb=75,ent=5,x=x,y=y}
- if(typ==3) return {typ=3,ammo=12,sprnb=76,ent=5,x=x,y=y}
 end
 
 -- enemy struct:
@@ -588,24 +599,26 @@ dep={{-1,0},{1,0},nil,{0,-1},
 nil,nil,nil,{0,1}}
 
 function _update60()
- printh(stat(0).."kb "..(stat(1)*100).."%")
  -- no update during animation
  --printh("anim="..tostr(anim))
- if(anim) return
+ printh("new frame")
  
  if state==100 then
-  if(btnp()!=0) state=101
+  if(btnp()!=0) state=101 return
  elseif state==101 then
   if btnp()!=0 then
    make_level()
    state=0
---   music(-1)
+   return
   end
  elseif state==102 then
-  if(btnp()!=0) restart()
+  if(btnp()!=0) restart() return
+ end
+ 
+ if(anim) return
  
  -- player turn
- elseif state==0 then
+ if state==0 then
   if not warn_low and player.hp<20 then
    add_msg("low hp!",8,9)
    warn_low=true
@@ -727,9 +740,9 @@ function player_turn()
  elseif o_pressed and not btn(🅾️) then
   -- reload
   local w=player.wpn
-  if w.mag!=w.amm and ammo[player.wpn.typ]>0 then
-   local amount=min(ammo[player.wpn.typ],w.mag-w.amm)
-   ammo[player.wpn.typ]-=amount
+  if w.mag!=w.amm and ammo[player.wpn.ammtyp]>0 then
+   local amount=min(ammo[player.wpn.ammtyp],w.mag-w.amm)
+   ammo[player.wpn.ammtyp]-=amount
    w.amm+=amount
    state=2 -- end of turn
    wait=15
@@ -823,6 +836,7 @@ function enemy_move(e)
 end
 
 function euc_dist(x1,y1,x2,y2)
+ printh("euc_dist")
  return sqrt((x2-x1)^2+(y2-y1)^2)
 end
 
@@ -850,7 +864,7 @@ function shoot(x1,y1,x2,y2,w)
    y3=e.y
    add(b[2],{e,dmg})
   end
-  local speed=5
+  local speed=10
   x3+=(rnd(6)-3)/8
   y3+=(rnd(6)-3)/8
   local d=sqrt((x3-x1)^2+(y3-y1)^2)
@@ -865,7 +879,7 @@ function damage(e,dmg)
  -- can't die (wall) or already dead
  if(not e.hp or e.hp<=0) return
  if(e.ent==1 or e==player) add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,2) add_blood(e.x,e.y)
- if e.arm then
+ if e.arm then -- armor
   local arm_dmg=min(e.arm,dmg)
   e.arm-=arm_dmg
   dmg-=arm_dmg
@@ -892,7 +906,7 @@ function damage(e,dmg)
     e.wpn.y=y
     add(floor_weapons,e.wpn)
     x,y=get_empty_tile(e.x,e.y)
-    add(floor_weapons,make_ammo(x,y,e.wpn.typ))
+    add(floor_weapons,make_ammo(x,y,e.wpn.ammtyp))
    end
   elseif e.ent==2 then -- barrel
    local ex={{},{}}
@@ -951,7 +965,7 @@ function get_floor_weapon(x,y)
  local out=nil
  for e in all(floor_weapons) do
   if e.x==x and e.y==y then
-   assert(out==nil)
+   assert(out==nil,"two objects on the same tile!") -- only one
    out=e
   end
  end
@@ -979,7 +993,7 @@ function init_seen()
 end
 
 function update_seen()
- local r=5
+ local r=visibility_radius
  for x=max(0,player.x-r),min(31,player.x+r) do
   for y=max(0,player.y-r),min(31,player.y+r) do
    if euc_dist(x,y,player.x,player.y)<=5 and not seen[x+1][y+1] then
@@ -1092,8 +1106,7 @@ function make_level()
  [72]=make_floor_weapon,
  [73]=make_floor_weapon,
  [74]=make_floor_ammo,
- [75]=make_floor_ammo,
- [76]=make_floor_ammo}
+ [75]=make_floor_ammo}
  for i=0,3 do
   for j=0,3 do
    x0=4+flr(rnd(2))
@@ -1189,14 +1202,14 @@ eee5e5eeeee5e5eeeeee55eeee5ee55e010000000000010001000000000000000000000000000100
 00000000000000000000000000000000100000000000001010000011100000000000001110000010100000111000001000000000000000000000000000000000
 00000000000000000000000000000000100000000000001011111110111111111111111011111110111111101111111000000000000000000000000000000000
 00000000000000000000000000000000100000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000
-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000
-eee888888888eeee888eee8888888888eeeee88888888eeeeeeeeeeeeeeeeeeeeeeeeeeeeee5eeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000
-eee8888888888eee8882ee88888888822eee8888888882eeeeeeeeeeeeeeeeeeeeeeeeeee555555eeee5e5eeeee0eeeeeeeeeeee000000000000000000000000
-eee88888888882ee8882ee8888888822eee88888888882eeeeeeeeeeee6666ee6666644eeee5555eee69696ee0090eeeeeeeeeee000000000000000000000000
-eee88822222882ee8882ee888222222eeee88822228882eeeeeeeeeeeeee54eee4444e54eeee65eeeea9a9ae09080eeee5555555000000000000000000000000
-eee8882eeee882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeee4eeeeeeeee4eeeee5eeeea9a9ae0808000ee565656e000000000000000000000000
-eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5eeeeaeaeae08008890e5555555000000000000000000000000
-eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0ee000eeeeeeeee000000000000000000000000
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
+eee888888888eeee888eee8888888888eeeee88888888eeeeeeeeeeeeeeeeeeeeeeeeeeeeee5eeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
+eee8888888888eee8882ee88888888822eee8888888882eeeeeeeeeeeeeeeeeeeeeeeeeee555555eeee5e5eeeee0eeee00000000000000000000000000000000
+eee88888888882ee8882ee8888888822eee88888888882eeeeeeeeeeee6666ee6666644eeee5555eee69696ee0090eee00000000000000000000000000000000
+eee88822222882ee8882ee888222222eeee88822228882eeeeeeeeeeeeee54eee4444e54eeee65eeeea9a9ae09080eee00000000000000000000000000000000
+eee8882eeee882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeee4eeeeeeeee4eeeee5eeeea9a9ae0808000e00000000000000000000000000000000
+eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5eeeeaeaeae0800889000000000000000000000000000000000
+eee88828888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0ee000e00000000000000000000000000000000
 eee8882e888882ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeee00000000eeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000
 eee8882ee22222ee8882ee8882eeeeeeeee8882eee8882eeeeeeeeee00000000eeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000
 eee8882eeeeeeeee8882ee8882eeeeeeeee8882eee8882eeeeeeeeee00000000eeeeee8eeeeeeeeeeee88e8e0000000000000000000000000000000000000000
