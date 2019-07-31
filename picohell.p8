@@ -2,7 +2,7 @@ pico-8 cartridge // http://www.pico-8.com
 version 18
 __lua__
 -- pico hell
--- by cpio
+-- by cpiod
 -- this code is licensed gpl3 at https://github.com/pfgimenez/picohell
 
 -- state:
@@ -27,6 +27,7 @@ __lua__
 -- 8: error
 
 function _init()
+ color_mode=1
 -- poke(0x5f2d, 1) -- mouse debug
  unset_unseen_color()
 -- menuitem(2,"show controls",show_ctrl)
@@ -243,28 +244,35 @@ function _draw_game()
   y0=p[2]
 	 draw_pentacle(2)
 	end
-	
+
  camera(cam_x+cam_dx+player.ox-64,cam_y+cam_dy+player.oy-64) 
  -- unseen map
  set_unseen_color()
- map(0,0,0,0,32,32)
+ local x,y=ceil((cam_x+cam_dx+player.ox-72)/8),ceil((cam_y+cam_dy+player.oy-72)/8)
+ map(x,y,8*x,8*y,17,17)
 
  unset_unseen_color()
+ 
+  camera()
+    	 print(stat(0).."kb "..(stat(1)*100).."%",1,20,9)
+ camera(cam_x+cam_dx+player.ox-64,cam_y+cam_dy+player.oy-64) 
+
+ 
  for x=max(0,player.x-visibility_radius),min(player.x+visibility_radius,31) do
   for y=max(0,player.y-visibility_radius),min(player.y+visibility_radius,31) do
    if(is_seen({x=x,y=y})) map(x,y,8*x,8*y,1,1)
   end
  end
- 
- for d in all(soot) do
-  if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
- end
+
+-- for d in all(soot) do
+--  if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
+-- end
  for d in all(decor) do
   if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
  end
- for e in all(entities) do
-  if(is_seen(e)) set_color(e) spr(2,e.ox,e.oy,1,1,e.x<=player.x)
- end
+-- for e in all(entities) do --shadow
+--  if(is_seen(e)) set_color(e) spr(2,e.ox,e.oy,1,1,e.x<=player.x)
+-- end
  for e in all(floor_weapons) do
   if(is_seen(e)) set_color(e) spr(e.sprnb,8*e.x,8*e.y-2)
  end
@@ -280,7 +288,7 @@ function _draw_game()
  d=get_sprite_delta(player)
  local s=32
  spr(s+d,player.ox,player.oy-2,1,1,facing>0)
- 
+
  -- aim
  if state==1 then
   local s=17
@@ -294,6 +302,7 @@ function _draw_game()
  animate()
 -- clip()
  camera()
+
  -- health bar
  rectfill(2,2,43,10,0)
  rect(2,2,43,10,5)
@@ -460,18 +469,24 @@ function explode(ex)
 end
 
 function set_unseen_color()
- for i=0,1 do
-  pal(i,0)
- end
- for i=2,15 do
-  pal(i,5)
+ if color_mode==0 then
+	 for i=0,1 do
+	  pal(i,0)
+	 end
+	 for i=2,15 do
+	  pal(i,5)
+	 end
+	 color_mode=1
  end
 end
 
 function unset_unseen_color()
- pal()  
- palt(0, false)
- palt(14, true)
+	if color_mode==1 then
+	 pal()
+	 palt(0, false)
+	 palt(14, true)
+	 color_mode=0
+ end
 end
 
 function add_msg(msg,c,c2,x,y,v)
@@ -500,6 +515,7 @@ function print_float(msg)
 end
 
 function set_color(e)
+-- todo: optimiser pour eviterl l'appel a is_visible
  if is_visible(e.x,e.y) then
   unset_unseen_color()
  else
@@ -635,7 +651,7 @@ nil,nil,nil,{0,1}}
 function _update60()
  -- no update during animation
  --printh("anim="..tostr(anim))
- printh("new frame")
+ --printh("new frame")
  
  if state==100 then
   if(btnp()!=0) state=101 return
@@ -1041,10 +1057,33 @@ function update_seen()
 end
 
 function is_seen(e)
- return seen[e.x+1][e.y+1]
+ return seen[e.x+1][e.y+1] and is_in_screen(e)
+end
+
+function is_in_screen(e)
+ return 8*e.x>=cam_x+cam_dx+player.ox-72
+ and 8*e.x<=cam_x+cam_dx+player.ox+72
+ and 8*e.y>=cam_y+cam_dy+player.oy-72
+ and 8*e.y<=cam_y+cam_dy+player.oy+72
 end
 -->8
 -- line of sight
+
+function update_visibility()
+ for d in all(decor) do
+  d.vis=is_visible(
+  if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
+ end
+ for e in all(floor_weapons) do
+  if(is_seen(e)) set_color(e) spr(e.sprnb,8*e.x,8*e.y-2)
+ end
+ for e in all(entities) do
+  if(is_seen(e)) set_color(e) spr(e.sprnb+get_sprite_delta(e),e.ox,e.oy-2,1,1,e.x<=player.x)
+ end
+ for b in all(barrels) do
+  if(is_seen(b)) set_color(b) spr(b.sprnb,8*b.x,8*b.y-2)
+ end
+end
 
 function in_map(x,y)
  return x>0 and y>0 and x<32 and y<32
@@ -1166,10 +1205,11 @@ function make_level()
 	end
 	 
  local x,y=get_empty_place()
- player["x"]=x
- player["y"]=y
- player["ox"]=8*x
- player["oy"]=8*y
+ x,y=15,15
+ player.x=x
+ player.y=y
+ player.ox=8*x
+ player.oy=8*y
  
  local s,d
  for i=0,31 do
@@ -1241,20 +1281,20 @@ eee5e5eeeee5e5eeeeee55eeee5ee55e010000000000010001000000000000000000000000000100
 00000000000000000000000000000000100000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
 888888888e8888888888ee88888888ee000000000000000000000000eeeeeeeeeeeeeeeeeee5eeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
-8888888888888888888ee888888888ee000000000000000000000000eeeeeeeeeeeeeeeee555555eeee5e5eeeee0eeee00000000000000000000000000000000
-888888888888888888ee8888888888ee000000000000000000000000ee6666ee6666644eeee5555eee69696ee0090eee00000000000000000000000000000000
-888eeeee88888eeeeeee888eeee888ee000000000000000000000000eeee54eee4444e54eeee65eeeea9a9ae09080eee00000000000000000000000000000000
-888eeeee88888eeeeeee888eeee888ee000000000000000000000000eeeee4eeeeeeeee4eeeee5eeeea9a9ae0808000e00000000000000000000000000000000
-888e888888888eeeeeee888eeee888ee000000000000000000000000eeeeeeeeeeeeeeeeeeeee5eeeeaeaeae0800889000000000000000000000000000000000
-888e888888888eeeeeee888eeee888ee000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee0ee000e00000000000000000000000000000000
+8888888888888888888ee888888888ee000000000000000000000000eeeeeeeeeeeeeeeee555555eeee5e5eeeeeeeeee00000000000000000000000000000000
+888888888888888888ee8888888888ee000000000000000000000000ee6666ee6666644eeee5555eee69696eeee9eeee00000000000000000000000000000000
+888eeeee88888eeeeeee888eeee888ee000000000000000000000000eeee54eee4444e54eeee65eeeea9a9aee9e8eeee00000000000000000000000000000000
+888eeeee88888eeeeeee888eeee888ee000000000000000000000000eeeee4eeeeeeeee4eeeee5eeeea9a9aee8e8eeee00000000000000000000000000000000
+888e888888888eeeeeee888eeee888ee000000000000000000000000eeeeeeeeeeeeeeeeeeeee5eeeeaeaeaee8ee889e00000000000000000000000000000000
+888e888888888eeeeeee888eeee888ee000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000
 888ee88888888eeeeeee888eeee888ee00000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000
 888eeeeeee888eeeeeee888eeee888ee00000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeee0000000000000000000000000000000000000000
-888eeeeeee888eeeeeee888eeee888ee00000000000000000000000000000000eeeeee8eeeeeeeeeeee88e8e0000000000000000000000000000000000000000
-888eeeeeee888eeeeeee888eeee888ee00000000000000000000000000000000eeeeeeeeeeee888eee88888e0000000000000000000000000000000000000000
-888eeeeeee88888888888888888888ee00000000000000000000000000000000e8eeeeeeee8888eee88888ee0000000000000000000000000000000000000000
-888eeeeeee888888888e888888888eee00000000000000000000000000000000eeee8eeeeeee8eeee888888e0000000000000000000000000000000000000000
-888eeeeeee88888888ee88888888eeee00000000000000000000000000000000eeeeeeeeeeeeeeeeee88888e0000000000000000000000000000000000000000
-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000eeeeeeeeeeeeeeeeeeee8eee0000000000000000000000000000000000000000
+888eeeeeee888eeeeeee888eeee888ee00000000000000000000000000000000eeeeee2eeeeeeeeeeee22e2e0000000000000000000000000000000000000000
+888eeeeeee888eeeeeee888eeee888ee00000000000000000000000000000000eeeeeeeeeeee222eee22222e0000000000000000000000000000000000000000
+888eeeeeee88888888888888888888ee00000000000000000000000000000000e2eeeeeeee2222eee22222ee0000000000000000000000000000000000000000
+888eeeeeee888888888e888888888eee00000000000000000000000000000000eeee2eeeeeee2eeee222222e0000000000000000000000000000000000000000
+888eeeeeee88888888ee88888888eeee00000000000000000000000000000000eeeeeeeeeeeeeeeeee22222e0000000000000000000000000000000000000000
+eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee00000000000000000000000000000000eeeeeeeeeeeeeeeeeeee2eee0000000000000000000000000000000000000000
 eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000eeeeeeeeeeeeeeee00000000000000000000000000000000000000000000000000000000
 888eeee88e888888888e888eeeeeeeee000000000000000000000000e77777eeeeeeeeee00000000000000000000000000000000000000000000000000000000
 888eeee8888888888888888eeeeeeeee000000000000000000000000e778775eee787eee00000000000000000000000000000000000000000000000000000000
