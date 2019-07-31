@@ -649,6 +649,8 @@ function _update60()
   if(btnp()!=0) restart() return
  end
  
+ -- check movment (except during aim) 
+ if(state!=1 and not depl) depl=dep[btnp()]
  if(anim) return
  
  -- player turn
@@ -747,7 +749,8 @@ function player_start_aim()
 end
 
 function player_turn()
- local d=dep[btnp()]
+ local d=depl or dep[btnp()]
+ depl=nil
  -- move
  if d!=nil then
   player_move(d)
