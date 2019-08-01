@@ -27,6 +27,7 @@ __lua__
 -- 8: error
 
 function _init()
+ level=0
  color_mode=1
 -- poke(0x5f2d, 1) -- mouse debug
  unset_unseen_color()
@@ -51,16 +52,8 @@ function _init()
 	state=100
 	wait=0
  anim=false
- player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0}
- bullets={}
- floor_weapons={}
- decor={}
- soot={}
- explosion={}
- blood={}
- medkits_used={}
- entities={}
- barrels={}
+ xp_goal={10,50,200,500,1000}
+ player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0,lvl=1,xp=0}
  ammo={12,0,0}
  max_ammo={50,30,100}
  init_seen()
@@ -307,12 +300,14 @@ function _draw_game()
  rectfill(2,2,43,10,0)
  rect(2,2,43,10,5)
  local c=player.hp>20 and 9 or 8
- print("♥ "..lpad(tostr(player.hp),3).."/"..maxhp,3,4,c)
+ print("♥ "..lpad(tostr(player.hp),3).."/"..maxhp,3,4,c) 
  if player.arm>0 then
   rectfill(82,2,80+43,10,0)
   rect(82,2,80+43,10,5)
   print(lpad(tostr(player.arm),3).."/"..maxarm.." 웃",84,4,9)
  end
+ print("lvl "..player.lvl.."xp "..player.xp.."/"..xp_goal[player.lvl],3,10,9)
+ print("dlvl "..level,84,10,9)
  local s=weapon_name[player.wpn.typ].." "
  ..player.wpn.amm
  .."/"..player.wpn.mag
@@ -383,10 +378,10 @@ function animate_ent(e)
  local x=e.x*8
  local y=e.y*8
  if e.ox!=x or e.oy!=y then
-  if(x-1>e.ox) e.ox+=3
-  if(x+1<e.ox) e.ox-=3
-  if(y-1>e.oy) e.oy+=3
-  if(y+1<e.oy) e.oy-=3
+  if(x-1>e.ox) e.ox+=1
+  if(x+1<e.ox) e.ox-=1
+  if(y-1>e.oy) e.oy+=1
+  if(y+1<e.oy) e.oy-=1
   if(abs(x-e.ox)==1) e.ox=x
   if(abs(y-e.oy)==1) e.oy=y
   printh("animate ent")
@@ -593,9 +588,9 @@ end
 function make_enemy(x,y,typ)
  typ-=12
  typ/=16
- if(typ==0) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(1),ent=1,rng=3,deltatime=rnd()})
- if(typ==1) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(2),ent=1,rng=3,deltatime=rnd()})
- if(typ==2) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(4),ent=1,rng=3,deltatime=rnd()})
+ if(typ==0) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(1),ent=1,rng=3,deltatime=rnd(),xp=3})
+ if(typ==1) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(2),ent=1,rng=3,deltatime=rnd(),xp=20})
+ if(typ==2) add(entities,{facing=1,sprnb=12+16*typ,x=x,y=y,ox=8*x,oy=8*y,hp=10,wpn=make_weapon(4),ent=1,rng=3,deltatime=rnd(),xp=50})
 end
 
 -- barrel struct:
@@ -707,9 +702,15 @@ function player_move(d)
   -- pick up armor
   pickup_armor()
   -- pick up ammo
-  pickup_ammo()  
+  pickup_ammo()
   update_seen()
   update_visibility()
+  if mget(player.x,player.y)==5 then
+   --stairs
+   make_level()
+   state=0
+   return
+  end
  else
   -- bump animation
   player.ox+=3*d[1]
@@ -801,6 +802,7 @@ function player_turn()
    local amount=min(ammo[player.wpn.ammtyp],w.mag-w.amm)
    ammo[player.wpn.ammtyp]-=amount
    w.amm+=amount
+   pickup_ammo()
    state=2 -- end of turn
    wait=15
    sfx(6)
@@ -935,13 +937,23 @@ end
 function damage(e,dmg)
  -- can't die (wall) or already dead
  if(not e.hp or e.hp<=0) return
- if(e.ent==1 or e==player) add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,1) add_blood(e.x,e.y)
+ if e.ent==1 or e==player then
+  add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,1)
+  add_blood(e.x,e.y)
+ end
  if e.arm then -- armor
   local arm_dmg=min(e.arm,dmg)
   e.arm-=arm_dmg
   dmg-=arm_dmg
  end
  e.hp-=dmg
+ -- may be saved by medkit or armor
+ if e==player then
+  if(dmg>20) cls(8) -- red flash when serious damage
+  use_medkit()
+  pickup_armor()
+ end
+
  if e.hp<=0 then
   -- if dead, project blood
   if e==player or e.ent==1 then
@@ -956,6 +968,7 @@ function damage(e,dmg)
    state=102 --game over
 --   wait=120
   elseif(e.ent==1) then
+   add_xp(e.xp)
    del(entities,e)
    if e.wpn.drp then
     local x,y=get_empty_tile(e.x,e.y)
@@ -994,6 +1007,15 @@ end
 function can_go(next_x,next_y)
  return fget(mget(next_x,next_y))%2==0
       and not chk_ent(next_x,next_y)
+end
+
+function add_xp(xp)
+ player.xp+=xp
+ if player.xp>=xp_goal[player.lvl] then
+  player.lvl+=1
+  maxhp+=20
+  player.hp+=20
+ end
 end
 
 function closest_enemy(x,y)
@@ -1170,6 +1192,17 @@ end
 -- level
 
 function make_level()
+ level+=1
+ bullets={}
+ floor_weapons={}
+ decor={}
+ soot={}
+ explosion={}
+ blood={}
+ medkits_used={}
+ entities={}
+ barrels={}
+ 
  local l={[12]=make_enemy,
  [28]=make_enemy,
  [44]=make_enemy,
@@ -1203,8 +1236,11 @@ function make_level()
    if(j==3) mset(31,i,1)
   end
 	end
+	
+	local x,y=get_empty_place()
+	mset(x,y,5)
 	 
- local x,y=get_empty_place()
+-- local x,y=get_empty_place()
  player.x=x
  player.y=y
  player.ox=8*x
@@ -1248,13 +1284,13 @@ function get_empty_place()
 end
 __gfx__
 0000000077777721eeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000ee888eeeee999eeeeeeeeeee00000000ee5555eeeeeeeeeeee5555eeee5555ee
-00000000776666d2eeeeeeee333ee333eeeeeeee000000000000000000000000e82228eee90009eeeee88eee00000000ee8585eeee5555eeee8585eeee8585ee
-00700700766667d2eeeeeeee3eeeeee3eeee3eee000000000000000000000000e822281ee900091eee8998ee00000000ee55522eee8585eeee55522eee55522e
-00077000766766d1eeeeeeeeee3eebeeeee333ee000000000000000000000000e888981ee999a91ee88aa88e00000000ee66659eee55522eee66659eee66659e
-00077000767666d1eeeeeeeee3333b3eeee3b3ee000000000000000000000000e888881ee999991ee899a98e00000000ee95999eee66659eee95999ee995999e
-00700700766666d1ee11111ee333333eeee333ee000000000000000000000000e888981ee999a91eee8898ee00000000ee9555eeee95999eee9555eeeee555ee
-000000002dddddd1e1111111ee3333eeeeee3eee000000000000000000000000e888981ee999a91eeee88eee00000000eee5e5eeee9555eeeee5e5eeee5ee5ee
-0000000022211111ee11111eeeeeeeeeeeeeeeee000000000000000000000000ee8881eeee9991eeeeeeeeee00000000eee5e5eeeee5e5eeeeee55eeee5ee55e
+00000000776666d2eeeeeeee333ee333eeeeeeee030000000000000000000000e82228eee90009eeeee88eee00000000ee8585eeee5555eeee8585eeee8585ee
+00700700766667d2eeeeeeee3eeeeee3eeee3eee030330000000000000000000e822281ee900091eee8998ee00000000ee55522eee8585eeee55522eee55522e
+00077000766766d1eeeeeeeeee3eebeeeee333ee030330330000000000000000e888981ee999a91ee88aa88e00000000ee66659eee55522eee66659eee66659e
+00077000767666d1eeeeeeeee3333b3eeee3b3ee000330330000000000000000e888881ee999991ee899a98e00000000ee95999eee66659eee95999ee995999e
+00700700766666d1ee11111ee333333eeee333ee030000330000000000000000e888981ee999a91eee8898ee00000000ee9555eeee95999eee9555eeeee555ee
+000000002dddddd1e1111111ee3333eeeeee3eee030330000000000000000000e888981ee999a91eeee88eee00000000eee5e5eeee9555eeeee5e5eeee5ee5ee
+0000000022211111ee11111eeeeeeeeeeeeeeeee030330330000000000000000ee8881eeee9991eeeeeeeeee00000000eee5e5eeeee5e5eeeeee55eeee5ee55e
 00000000eee3eeeeeeeeeeeeeeeeeeee00000000000000000000000000000000eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee5555eeeeeeeeeeee5555eeee5555ee
 00000000ee333eeeee555eeeee888eee00000000000000000000000000000000eee5eeeeeeee5eeeeee5eeeeeeee5eeeee8585eeee5555eeee8585eeee8585ee
 00000000e3eee3eee5eee5eee8eee8ee00000000000000000000000000000000ee515eeeeee515eeee5155eeee5515eeee55522eee8585eeee55522eee55522e
