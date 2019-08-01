@@ -25,6 +25,7 @@ __lua__
 -- 6: reload
 -- 7: medkit used
 -- 8: error
+-- 9: level up
 
 function _init()
  level=0
@@ -52,10 +53,10 @@ function _init()
 	state=100
 	wait=0
  anim=false
- xp_goal={10,50,200,500,1000}
- player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0,lvl=1,xp=0}
+ xp_goal={10,50,200,500}
+ player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0,lvl=1,xp=0,def=0}
  ammo={12,0,0}
- max_ammo={50,30,100}
+ max_ammo={200,50}
  init_seen()
 end
 
@@ -297,17 +298,15 @@ function _draw_game()
  camera()
 
  -- health bar
- rectfill(2,2,43,10,0)
- rect(2,2,43,10,5)
+ rectfill(2,2,43,16,0)
+ rect(2,2,43,16,5)
  local c=player.hp>20 and 9 or 8
  print("♥ "..lpad(tostr(player.hp),3).."/"..maxhp,3,4,c) 
- if player.arm>0 then
-  rectfill(82,2,80+43,10,0)
-  rect(82,2,80+43,10,5)
-  print(lpad(tostr(player.arm),3).."/"..maxarm.." 웃",84,4,9)
- end
- print("lvl "..player.lvl.."xp "..player.xp.."/"..xp_goal[player.lvl],3,10,9)
- print("dlvl "..level,84,10,9)
+ print("웃 "..lpad(tostr(player.arm),3).."/"..maxarm,3,10,9)
+ rectfill(93,2,80+43,16,0)
+ rect(93,2,80+43,16,5)
+ print("level "..player.lvl,95,4,9)
+ print("depth "..level,95,10,9)
  local s=weapon_name[player.wpn.typ].." "
  ..player.wpn.amm
  .."/"..player.wpn.mag
@@ -317,11 +316,7 @@ function _draw_game()
  rectfill(x-2,y-2,x+#s*4,y+6,0)
  rect(x-2,y-2,x+#s*4,y+6,5)
  print(s,x,y,9)
- if(t()%5==0) maxcpu=0
- maxcpu=maxcpu or 0
- print(stat(0).."kb "..(stat(1)*100).."% "..stat(7).."/"..stat(8).."fps",1,15,3)
- maxcpu=max(maxcpu,stat(1))
- print(maxcpu,1,30,3)
+ print((stat(1)*100).."% "..stat(7).."fps",1,17,3)
 end
 
 function lpad(s,l)
@@ -537,6 +532,7 @@ end
 -- 1: shotgun
 -- 2: rifle
 
+ammo_name={"bullets","shells"}
 weapon_name={"pistol","combat shotgun","assault rifle"}
 -- weapon struct:
 -- x,y: position (if on floor)
@@ -737,7 +733,7 @@ function pickup_ammo()
   del(floor_weapons,a)
   local old=ammo[a.typ]
   ammo[a.typ]=min(max_ammo[a.typ],ammo[a.typ]+a.ammo)
-  add_msg("+"..tostr(ammo[a.typ]-old).." ammo")
+  add_msg("+"..tostr(ammo[a.typ]-old).." "..ammo_name[a.typ])
  end
 end
 
@@ -937,6 +933,7 @@ end
 function damage(e,dmg)
  -- can't die (wall) or already dead
  if(not e.hp or e.hp<=0) return
+ if(e==player) dmg=max(1,dmg-player.def)
  if e.ent==1 or e==player then
   add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,1)
   add_blood(e.x,e.y)
@@ -1010,11 +1007,21 @@ function can_go(next_x,next_y)
 end
 
 function add_xp(xp)
+ -- level max
+ if(player.lvl==5) return
  player.xp+=xp
  if player.xp>=xp_goal[player.lvl] then
+  sfx(9)
+  player.def+=1
   player.lvl+=1
   maxhp+=20
   player.hp+=20
+  if player.lvl<5 then
+   add_msg("level up!",11,3)
+  else
+   add_msg("level max!",11,3)
+  end   
+
  end
 end
 
@@ -1238,7 +1245,7 @@ function make_level()
 	end
 	
 	local x,y=get_empty_place()
-	mset(x,y,5)
+	if(level<9)	mset(x,y,5) -- last level
 	 
 -- local x,y=get_empty_place()
  player.x=x
@@ -1563,7 +1570,7 @@ __sfx__
 000700001b0532005310053111032e103281032e103381031810319103371031b1031d1031e103211032210324103291032a1032d1032f103301030b103091030a10300103001030010300103001030010300103
 0008000038f3033f4038f4031f3038f3033f3038f2032f2038f1032f1032f0032f0032f0032f0032f0038f0000f0000f0000f0000f0000f0000f0000f0000f0000f0000f003ff0000f0000f0000f0000f0000f00
 001200000d15300203032030220302203342030020300203142030020300203002030020300203002030020300203002030020300203002030020300203002030020300203002030020300203002030020300203
-001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000300001803020040230502304015040120201101011010140301c04021050300503c050000003c050000003c0503b0003e05000000000000000000000000000000000000000000000000000000000000000000
 011c00000004500045000450504500045000450004500045000450004500045000450004500045060450004506045000450004500045000450004500045000450304500045000450004500045000450004500045
 001a00000081300813008130081300813008130081300813008130081300813008130081300813008130081300813008130081300813008130081300813008130081300813008130081300813008130081300813
 001e0000090001000010000070000e0000e0000c00009000090401000010000070000e0000e0000c040090400e0001000010000070400e040070000904015000170000c0000a0000c0400a0400a0400a0400a040
