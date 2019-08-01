@@ -50,7 +50,6 @@ function _init()
 	title_cam_y=0
 	state=100
 	wait=0
---	music(1)
  anim=false
  player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0}
  bullets={}
@@ -233,6 +232,7 @@ pentacles_pos={{64,64,1.5,0}}
 --{rnd()*128,rnd()*128,rnd(0.5)+0.5,rnd()}}
 
 function _draw_game()
+ printh("draw")
  cls()
  camera()
 -- clip(0,8,128,112)
@@ -321,9 +321,12 @@ function _draw_game()
  local y=15*8+1
  rectfill(x-2,y-2,x+#s*4,y+6,0)
  rect(x-2,y-2,x+#s*4,y+6,5)
- print(s,x,y,9) 
+ print(s,x,y,9)
+ if(t()%5==0) maxcpu=0
+ maxcpu=maxcpu or 0
  print(stat(0).."kb "..(stat(1)*100).."% "..stat(7).."/"..stat(8).."fps",1,15,3)
-
+ maxcpu=max(maxcpu,stat(1))
+ print(maxcpu,1,30,3)
 end
 
 function lpad(s,l)
@@ -623,7 +626,7 @@ end
 function add_blood(x,y)
  local found=false
  for e in all(decor) do
-  if(e.x==x and e.y==y) e.sprnb=min(90,e.sprnb+1) found=true
+  if(e.x==x and e.y==y) e.sprnb=min(90,e.sprnb+1) found=true break
  end
  if not found then
   local e={x=x,y=y,sprnb=88,ent=3,vis=is_visible(x,y)}
@@ -651,7 +654,7 @@ nil,nil,nil,{0,1}}
 function _update60()
  -- no update during animation
  --printh("anim="..tostr(anim))
- --printh("new frame")
+ printh("new frame")
  
  if state==100 then
   if(btnp()!=0) state=101 return
@@ -746,7 +749,7 @@ function use_medkit()
    local old=player.hp
    player.hp=min(maxhp,player.hp+e.hp)
    add_msg("+"..tostr(player.hp-old).." hp",12,1)
-   warn_low=false
+   if(player.hp>=20) warn_low=false
   end
  end
 end
@@ -776,7 +779,7 @@ function player_turn()
   player_start_aim()
  elseif btnp(🅾️) and not o_pressed then
   o_pressed=t()
- elseif o_pressed and t()-o_pressed>0.2 then 
+ elseif o_pressed and t()-o_pressed>0.4 then 
   local w=player.wpn
   local w2=get_floor_weapon(player.x,player.y)
   if w2==nil or w2.ent!=0 then
@@ -845,7 +848,7 @@ function enemy_turn()
  for e in all(entities) do
   local moved=false
   local d=dist(player.x,player.y,e.x,e.y)
-  if not is_visible(e.x,e.y,true) then
+  if not e.vis then
    -- do nothing if player not seen
    moved=true
   elseif d>e.rng then
@@ -997,7 +1000,7 @@ function closest_enemy(x,y)
  local e2=nil
  local m=0
  for e in all(entities) do
-  if is_visible(e.x,e.y,true) then
+  if is_seen(e) then
    local d=dist(player.x,player.y,e.x,e.y)
    if e2==nil or d<m then
     e2=e
@@ -1051,7 +1054,7 @@ function update_seen()
  local r=visibility_radius
  for x=max(0,player.x-r),min(31,player.x+r) do
   for y=max(0,player.y-r),min(31,player.y+r) do
-   if euc_dist(x,y,player.x,player.y)<=5 and not seen[x+1][y+1] then
+   if dist(x,y,player.x,player.y)<=visibility_radius and not seen[x+1][y+1] then
     seen[x+1][y+1]=is_visible(x,y,false)
    end
   end
@@ -1072,17 +1075,12 @@ end
 -- line of sight
 
 function update_visibility()
- for e in all(decor) do
-  e.vis=is_visible(e.x,e.y)
- end
- for e in all(floor_weapons) do
-  e.vis=is_visible(e.x,e.y)
- end
- for e in all(entities) do
-  e.vis=is_visible(e.x,e.y)
- end
- for e in all(barrels) do
-  e.vis=is_visible(e.x,e.y)
+ printh("update_visibility")
+ list={decor,floor_weapons,entities,barrels}
+ for l in all(list) do
+  for e in all(l) do
+   if(is_in_screen(e)) e.vis=is_visible(e.x,e.y)
+  end
  end
 end
 
@@ -1116,6 +1114,7 @@ function chk_opaque(x,y)
 end
 
 function is_visible(x2,y2,chk_last)
+ printh("is_visible "..t())
  return not los_line(x2,y2,player.x,player.y,chk_opaque,chk_last)
 end
 
@@ -1525,7 +1524,7 @@ __sfx__
 010500002c6402e640116100c6100b620156302c6403f6403f6403e6403e6403e6403d6403b64036640326402f64026640216301e6301b63018620136200e6200961007610056100361000610006000060000600
 000300000e3400b340093300733005320033200231000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
 000300001c020240402e0502e020023000e3000b30005300023000130001300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300003000030000300
-000e00000a1530410301103111032e103281032e103381031810319103371031b1031d1031e103211032210324103291032a1032d1032f103301030b103091030a10300103001030010300103001030010300103
+000700001b0532005310053111032e103281032e103381031810319103371031b1031d1031e103211032210324103291032a1032d1032f103301030b103091030a10300103001030010300103001030010300103
 0008000038f3033f4038f4031f3038f3033f3038f2032f2038f1032f1032f0032f0032f0032f0032f0038f0000f0000f0000f0000f0000f0000f0000f0000f0000f0000f003ff0000f0000f0000f0000f0000f00
 001200000d15300203032030220302203342030020300203142030020300203002030020300203002030020300203002030020300203002030020300203002030020300203002030020300203002030020300203
 001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
