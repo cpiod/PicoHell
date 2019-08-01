@@ -260,7 +260,7 @@ function _draw_game()
  
  for x=max(0,player.x-visibility_radius),min(player.x+visibility_radius,31) do
   for y=max(0,player.y-visibility_radius),min(player.y+visibility_radius,31) do
-   if(is_seen({x=x,y=y})) map(x,y,8*x,8*y,1,1)
+   if(dist(player.x,player.y,x,y)<=visibility_radius and is_seen({x=x,y=y})) map(x,y,8*x,8*y,1,1)
   end
  end
 
@@ -270,9 +270,9 @@ function _draw_game()
  for d in all(decor) do
   if(is_seen(d)) set_color(d) spr(d.sprnb,8*d.x,8*d.y-2)
  end
--- for e in all(entities) do --shadow
---  if(is_seen(e)) set_color(e) spr(2,e.ox,e.oy,1,1,e.x<=player.x)
--- end
+ for e in all(entities) do --shadow
+  if(is_seen(e)) set_color(e) spr(2,e.ox,e.oy,1,1,e.x<=player.x)
+ end
  for e in all(floor_weapons) do
   if(is_seen(e)) set_color(e) spr(e.sprnb,8*e.x,8*e.y-2)
  end
@@ -368,10 +368,10 @@ function animate_medkit(tim)
 end
 
 function animate_camera()
- if(cam_x<cam_xc) cam_x+=ceil((cam_xc-cam_x)/4)
- if(cam_x>cam_xc) cam_x-=ceil((cam_x-cam_xc)/4)
- if(cam_y<cam_yc) cam_y+=ceil((cam_yc-cam_y)/4)
- if(cam_y>cam_yc) cam_y-=ceil((cam_y-cam_yc)/4)
+ if(cam_x<cam_xc) cam_x+=ceil((cam_xc-cam_x)/8)
+ if(cam_x>cam_xc) cam_x-=ceil((cam_x-cam_xc)/8)
+ if(cam_y<cam_yc) cam_y+=ceil((cam_yc-cam_y)/8)
+ if(cam_y>cam_yc) cam_y-=ceil((cam_y-cam_yc)/8)
  if(cam_x!=cam_xc or cam_y!=cam_yc) printh("animate camera")
  return cam_x!=cam_xc or cam_y!=cam_yc
 end
@@ -423,7 +423,7 @@ function get_sprite_delta(e)
  local t=t()--+e.deltatime
  if 8*e.x==e.ox and 8*e.y==e.oy then
   -- still
-  if(t%(0.7)>0.35) d=1
+  if(t%(1.4)>0.7) d=1
  else
   -- moving
   d=2
@@ -437,7 +437,7 @@ function anim_blood(e)
   del(blood,e)
   return false
  else
-  e[4]+=0.5
+  e[4]+=0.1
   e[1]+=e[3]
   e[2]+=e[4]
   pset(e[1],e[2],8)
@@ -449,10 +449,10 @@ function explode(ex)
  cam_dx=rnd(6)-3
  cam_dy=rnd(6)-3
  for e in all(ex[1]) do
-  circfill(e.x,e.y,min(e.rad,200*(t()-e.t)),8)
-  circfill(e.x,e.y,min(e.rad,200*(t()-e.t-0.1)),9)
-  circfill(e.x,e.y,min(e.rad,200*(t()-e.t-0.3)),0)
-  if 200*(t()-e.t-0.3)>e.rad then
+  circfill(e.x,e.y,min(e.rad,100*(t()-e.t)),8)
+  circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.1)),9)
+  circfill(e.x,e.y,min(e.rad,100*(t()-e.t-0.3)),0)
+  if 100*(t()-e.t-0.3)>e.rad then
    del(ex[1],e)
   end
  end
@@ -492,7 +492,7 @@ function add_msg(msg,c,c2,x,y,v)
  if(c==nil) c=7
  if(x==nil) x=player.ox
  if(y==nil) y=player.oy
- if(v==nil) v=1
+ if(v==nil) v=0.5
  if(c2==nil) c2=1
  add(mesgs,{msg,16,c,x,y,v,c2})
 end
@@ -555,7 +555,7 @@ weapon_name={"pistol","combat shotgun","assault rifle"}
 function make_weapon(typ)
 	if(typ==1) return {typ=1,ammtyp=1,mag=6,amm=6,bul=1,rng=5,dmg=3,disp=1,ent=0,sprnb=71,used=1,maxrng=9,delay=0,drp=true}
 	if(typ==2) return {typ=2,ammtyp=2,mag=1,amm=1,bul=5,rng=3,dmg=5,disp=5,ent=0,sprnb=72,used=1,maxrng=4,delay=0,drp=true}
-	if(typ==3) return {typ=3,ammtyp=1,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=1,drp=true}
+	if(typ==3) return {typ=3,ammtyp=1,mag=24,amm=24,bul=4,rng=5,dmg=3,disp=2,ent=0,sprnb=73,used=4,maxrng=9,delay=3,drp=true}
 	if(typ==4) return {typ=4,ammtyp=0,mag=100,amm=100,bul=1,rng=5,dmg=10,disp=1,ent=0,used=1,maxrng=9,delay=0,bulspr=10}
 	assert(false,typ)
 end
@@ -918,7 +918,7 @@ function shoot(x1,y1,x2,y2,w)
    y3=e.y
    add(b[2],{e,dmg})
   end
-  local speed=10
+  local speed=5
   x3+=(rnd(6)-3)/8
   y3+=(rnd(6)-3)/8
   local d=sqrt((x3-x1)^2+(y3-y1)^2)
@@ -932,7 +932,7 @@ end
 function damage(e,dmg)
  -- can't die (wall) or already dead
  if(not e.hp or e.hp<=0) return
- if(e.ent==1 or e==player) add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,2) add_blood(e.x,e.y)
+ if(e.ent==1 or e==player) add_msg("-"..tostr(dmg).." hp",9,1,e.ox,e.oy,1) add_blood(e.x,e.y)
  if e.arm then -- armor
   local arm_dmg=min(e.arm,dmg)
   e.arm-=arm_dmg
@@ -943,10 +943,10 @@ function damage(e,dmg)
   -- if dead, project blood
   if e==player or e.ent==1 then
    for i=1,5 do
-    local v=1+rnd(1)
+    local v=0.5+rnd(0.5)
     local a=rnd(0.5)
     add(blood,{e.ox+4+rnd(2)-1,e.oy+rnd(2)-1,
-    cos(a)*v,sin(a)*v,t()+0.2+rnd(0.1)})
+    cos(a)*v,sin(a)*v,t()+0.3+rnd(0.1)})
    end
   end
   if e==player then
