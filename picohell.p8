@@ -57,7 +57,6 @@ function _init()
  player={hp=maxhp,ent=9,deltatime=rnd(),wpn=make_weapon(3),arm=0,lvl=1,xp=0,def=0}
  ammo={12,0,0}
  max_ammo={200,50}
- init_seen()
 end
 
 function restart()
@@ -316,7 +315,8 @@ function _draw_game()
 -- rectfill(x-2,y-2,x+#s*4,y+6,0)
 -- rect(x-2,y-2,x+#s*4,y+6,6)
  print(s,x,y,9)
- print((stat(1)*100).."% "..stat(7).."fps",1,17,3)
+ print((stat(1)*100).."%",1,17,3)
+ print(stat(7).."fps",1,23,3)
 end
 
 function lpad(s,l)
@@ -714,8 +714,8 @@ function player_move(d)
   end
  else
   -- bump animation
-  player.ox+=3*d[1]
-  player.oy+=3*d[2]
+  player.ox+=4*d[1]
+  player.oy+=4*d[2]
  end
 end
 
@@ -1216,6 +1216,7 @@ function make_level()
  medkits_used={}
  entities={}
  barrels={}
+ init_seen()
  
  local l={[12]=make_enemy,
  [28]=make_enemy,
@@ -1233,6 +1234,7 @@ function make_level()
  [88]=make_blood,
  [89]=make_blood,
  [90]=make_blood}
+ -- todo: adapt to difficulty
  for i=0,3 do
   for j=0,3 do
    x0=4+flr(rnd(2))
